@@ -7,6 +7,8 @@ import { medicalRecordController } from '../controllers/medicalRecordController.
 import { adminController } from '../controllers/adminController.js';
 import { auditLogController } from '../controllers/auditLogController.js';
 import { securityDemoController } from '../controllers/securityDemoController.js';
+import { securityCommandCenterController } from '../controllers/securityCommandCenterController.js';
+import { wafController } from '../controllers/wafController.js';
 import { getCsrfTokenHandler } from '../middleware/csrf.js';
 import { requireAuthentication, requireRole, requireRecordAccess } from '../middleware/rbac.js';
 import { loginRateLimiter, sensitiveActionRateLimiter } from '../middleware/rateLimiter.js';
@@ -29,10 +31,22 @@ apiRouter.get('/health', (req, res) => res.json({ status: 'HEALTHY', timestamp: 
 // AUTHENTICATION ROUTES
 // =============================================================================
 apiRouter.post('/auth/login', loginRateLimiter, (req, res, next) => authController.login(req, res, next));
+apiRouter.post('/auth/login/2fa', loginRateLimiter, (req, res, next) => authController.loginVerify2FA(req, res, next));
 apiRouter.post('/auth/register', (req, res, next) => authController.registerPatient(req, res, next));
 apiRouter.post('/auth/logout', (req, res, next) => authController.logout(req, res, next));
 apiRouter.get('/auth/session', (req, res, next) => authController.getSession(req, res, next));
 apiRouter.post('/auth/change-password', requireAuthentication, sensitiveActionRateLimiter, (req, res, next) => authController.changePassword(req, res, next));
+
+// Two-Factor Authentication (2FA) Routes
+apiRouter.get('/auth/2fa/status', requireAuthentication, (req, res, next) => authController.get2FAStatus(req, res, next));
+apiRouter.post('/auth/2fa/setup', requireAuthentication, sensitiveActionRateLimiter, (req, res, next) => authController.setup2FA(req, res, next));
+apiRouter.post('/auth/2fa/enable', requireAuthentication, sensitiveActionRateLimiter, (req, res, next) => authController.enable2FA(req, res, next));
+apiRouter.post('/auth/2fa/disable', requireAuthentication, sensitiveActionRateLimiter, (req, res, next) => authController.disable2FA(req, res, next));
+
+// Active Session & Device Management Routes
+apiRouter.get('/auth/sessions', requireAuthentication, (req, res, next) => authController.getActiveSessions(req, res, next));
+apiRouter.delete('/auth/sessions/:sessionId', requireAuthentication, (req, res, next) => authController.revokeSession(req, res, next));
+apiRouter.post('/auth/sessions/revoke-others', requireAuthentication, (req, res, next) => authController.revokeOtherSessions(req, res, next));
 
 // Development-only lockout & demo account reset route (never exposed in production)
 if (env.NODE_ENV !== 'production') {
@@ -127,6 +141,20 @@ apiRouter.post('/admin/doctors', requireAuthentication, requireRole('admin'), se
 apiRouter.get('/admin/dashboard', requireAuthentication, requireRole('admin'), (req, res, next) => adminController.getDashboardMetrics(req, res, next));
 
 // =============================================================================
+// SECURITY COMMAND CENTER (SOC) ROUTES (ADMIN ONLY)
+// =============================================================================
+apiRouter.get('/admin/security/overview', requireAuthentication, requireRole('admin'), (req, res, next) => securityCommandCenterController.getOverview(req, res, next));
+apiRouter.get('/admin/security/analytics', requireAuthentication, requireRole('admin'), (req, res, next) => securityCommandCenterController.getAnalytics(req, res, next));
+apiRouter.get('/admin/security/events', requireAuthentication, requireRole('admin'), (req, res, next) => securityCommandCenterController.getEvents(req, res, next));
+apiRouter.get('/admin/security/alerts', requireAuthentication, requireRole('admin'), (req, res, next) => securityCommandCenterController.getAlerts(req, res, next));
+
+// =============================================================================
+// WEB APPLICATION FIREWALL (WAF) SIMULATOR ROUTES (ADMIN ONLY)
+// =============================================================================
+apiRouter.get('/admin/waf/overview', requireAuthentication, requireRole('admin'), (req, res, next) => wafController.getOverview(req, res, next));
+apiRouter.put('/admin/waf/rules/:ruleId', requireAuthentication, requireRole('admin'), (req, res, next) => wafController.updateRule(req, res, next));
+
+// =============================================================================
 // AUDIT LOGS ROUTES
 // =============================================================================
 apiRouter.get('/audit-logs', requireAuthentication, requireRole('admin'), (req, res, next) => auditLogController.getAuditLogs(req, res, next));
@@ -140,6 +168,7 @@ apiRouter.post('/security-demo/test-sqli', (req, res, next) => securityDemoContr
 apiRouter.post('/security-demo/test-xss', (req, res) => securityDemoController.testXss(req, res));
 apiRouter.post('/security-demo/test-csrf', (req, res) => securityDemoController.testCsrf(req, res));
 apiRouter.post('/security-demo/test-idor', (req, res, next) => securityDemoController.testIdor(req, res, next));
+apiRouter.post('/security-demo/test-waf', (req, res, next) => wafController.simulate(req, res, next));
 apiRouter.get('/security-demo/test-headers', (req, res) => securityDemoController.getSecurityHeaders(req, res));
 apiRouter.get('/security-demo/test-audit', (req, res, next) => securityDemoController.getAuditLogs(req, res, next));
 apiRouter.get('/security-demo/test-config', (req, res) => securityDemoController.getSecureConfig(req, res));

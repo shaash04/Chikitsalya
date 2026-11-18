@@ -15,6 +15,9 @@ import { UserManagementComponent } from './features/admin/user-management/user-m
 import { ProvisionDoctorComponent } from './features/admin/provision-doctor/provision-doctor.component';
 import { AuditLogViewerComponent } from './features/audit-logs/audit-log-viewer/audit-log-viewer.component';
 import { SecurityDemoCenterComponent } from './features/security-demo/security-demo-center/security-demo-center.component';
+import { SecurityCommandCenterComponent } from './features/admin/security-command-center/security-command-center.component';
+import { WafManagementComponent } from './features/admin/waf-management/waf-management.component';
+import { AccountSecurityComponent } from './features/account-security/account-security.component';
 import { authGuard, roleGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
@@ -34,11 +37,14 @@ export const routes: Routes = [
 
   // Admin Routes
   { path: 'admin/dashboard', component: AdminDashboardComponent, canActivate: [authGuard, roleGuard(['admin'])] },
+  { path: 'admin/security-center', component: SecurityCommandCenterComponent, canActivate: [authGuard, roleGuard(['admin'])] },
+  { path: 'admin/waf', component: WafManagementComponent, canActivate: [authGuard, roleGuard(['admin'])] },
   { path: 'admin/users', component: UserManagementComponent, canActivate: [authGuard, roleGuard(['admin'])] },
   { path: 'admin/provision-doctor', component: ProvisionDoctorComponent, canActivate: [authGuard, roleGuard(['admin'])] },
   { path: 'audit-logs', component: AuditLogViewerComponent, canActivate: [authGuard, roleGuard(['admin'])] },
 
   // Shared Authenticated Routes
+  { path: 'account/security', component: AccountSecurityComponent, canActivate: [authGuard] },
   { path: 'appointments', component: AppointmentListComponent, canActivate: [authGuard] },
   { path: 'medical-records', component: RecordListComponent, canActivate: [authGuard] },
   { path: 'medical-records/:id', component: RecordDetailComponent, canActivate: [authGuard] },

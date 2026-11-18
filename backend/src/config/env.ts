@@ -18,6 +18,7 @@ const envSchema = z.object({
   USE_IN_MEMORY_DB: z.string().default('auto'),
   SESSION_SECRET: z.string().min(16, 'SESSION_SECRET must be at least 16 characters for secure hashing'),
   CSRF_SECRET: z.string().min(16, 'CSRF_SECRET must be at least 16 characters'),
+  TWO_FACTOR_ENCRYPTION_KEY: z.string().min(16, 'TWO_FACTOR_ENCRYPTION_KEY must be at least 16 characters').default('shms_2fa_aes256_encryption_master_key_2026!'),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
   LOGIN_RATE_LIMIT_MAX: z.coerce.number().default(10)

@@ -5,6 +5,7 @@ import fs from 'fs';
 import { helmetMiddleware, corsMiddleware, customSecurityHeaders } from './middleware/securityHeaders.js';
 import { requestCorrelationMiddleware } from './middleware/auditLogger.js';
 import { sessionMiddleware } from './middleware/sessionAuth.js';
+import { wafMiddleware } from './middleware/wafMiddleware.js';
 import { csrfProtection } from './middleware/csrf.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { apiRouter } from './routes/index.js';
@@ -34,7 +35,10 @@ export function createApp(): Express {
   // 7. Request correlation tracing
   app.use(requestCorrelationMiddleware);
 
-  // 8. Server-managed Session authentication middleware
+  // 8. Application-Level Web Application Firewall (WAF) Simulator
+  app.use(wafMiddleware);
+
+  // 9. Server-managed Session authentication middleware
   app.use(sessionMiddleware);
 
   // 9. CSRF protection on state-changing operations
@@ -44,6 +48,7 @@ export function createApp(): Express {
     if (
       req.path === '/csrf-token' ||
       req.path === '/auth/login' ||
+      req.path === '/auth/login/2fa' ||
       req.path === '/auth/register' ||
       req.path === '/auth/logout' ||
       req.path === '/auth/dev-reset-lockouts' ||
