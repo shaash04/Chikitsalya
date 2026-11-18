@@ -77,6 +77,27 @@ export class AuditLogRepository {
     );
     return rows;
   }
+
+  async count(): Promise<number> {
+    try {
+      const [rows] = await db.execute<any[]>('SELECT COUNT(*) as count FROM audit_logs');
+      return rows && rows[0] ? Number(rows[0].count) : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  async countActiveSessions(): Promise<number> {
+    try {
+      const [rows] = await db.execute<any[]>(
+        'SELECT COUNT(*) as count FROM sessions WHERE expires_at > ?',
+        [new Date().toISOString().slice(0, 19).replace('T', ' ')]
+      );
+      return rows && rows[0] ? Number(rows[0].count) : 0;
+    } catch {
+      return 0;
+    }
+  }
 }
 
 export const auditLogRepository = new AuditLogRepository();

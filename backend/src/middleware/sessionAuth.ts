@@ -181,3 +181,152 @@ export async function sessionMiddleware(req: Request, res: Response, next: NextF
 
   next();
 }
+
+/**
+ * Sign temporary 2FA pending state token with 5-minute validity
+ */
+export function signTwoFactorPendingToken(userId: number, email: string): string {
+  const payload = {
+    userId,
+    email,
+    exp: Date.now() + 5 * 60 * 1000 // 5 minutes
+  };
+  const str = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = crypto.createHmac('sha256', env.SESSION_SECRET).update(str).digest('base64url');
+  return `${str}.${sig}`;
+}
+
+/**
+ * Verify temporary 2FA pending token
+ */
+export function verifyTwoFactorPendingToken(token: string): { userId: number; email: string } | null {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [str, sig] = parts;
+  const expectedSig = crypto.createHmac('sha256', env.SESSION_SECRET).update(str).digest('base64url');
+
+  try {
+    const valid = crypto.timingSafeEqual(
+      Buffer.from(sig, 'utf8'),
+      Buffer.from(expectedSig, 'utf8')
+    );
+    if (!valid) return null;
+
+    const payload = JSON.parse(Buffer.from(str, 'base64url').toString('utf8'));
+    if (!payload.userId || !payload.exp || Date.now() > payload.exp) {
+      return null;
+    }
+    return { userId: payload.userId, email: payload.email };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Robust User-Agent Parser for device / browser identity
+ */
+export function parseDeviceInfo(ua?: string | null): { browser: string; os: string; device: string } {
+  if (!ua) return { browser: 'Unknown Browser', os: 'Unknown OS', device: 'Desktop' };
+
+  let os = 'Unknown OS';
+  if (/windows/i.test(ua)) os = 'Windows';
+  else if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
+  else if (/android/i.test(ua)) os = 'Android';
+  else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
+  else if (/linux/i.test(ua)) os = 'Linux';
+
+  let browser = 'Unknown Browser';
+  if (/edg/i.test(ua)) browser = 'Microsoft Edge';
+  else if (/chrome|crios/i.test(ua) && !/edg/i.test(ua)) browser = 'Google Chrome';
+  else if (/firefox|fxios/i.test(ua)) browser = 'Mozilla Firefox';
+  else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Apple Safari';
+  else if (/curl|python|postman|insomnia/i.test(ua)) browser = 'API Client';
+
+  let device = 'Desktop';
+  if (/mobile|android|iphone|ipod/i.test(ua)) device = 'Mobile';
+  else if (/tablet|ipad/i.test(ua)) device = 'Tablet';
+
+  return { browser, os, device };
+}
+
+export interface ActiveSessionView {
+  sessionId: string;
+  ipAddress: string;
+  userAgent: string | null;
+  deviceInfo: { browser: string; os: string; device: string };
+  createdAt: string;
+  lastActiveAt: string;
+  isCurrent: boolean;
+}
+
+/**
+ * List all active sessions for a user
+ */
+export async function getUserSessions(userId: number, currentSessionId?: string): Promise<ActiveSessionView[]> {
+  const [rows] = await db.execute<any[]>(
+    'SELECT session_id, ip_address, user_agent, created_at, updated_at, data FROM sessions WHERE user_id = ? ORDER BY updated_at DESC',
+    [userId]
+  );
+
+  return (rows || []).map(r => {
+    let parsedData: any = {};
+    try {
+      parsedData = JSON.parse(r.data);
+    } catch {}
+
+    const lastActive = parsedData.lastActiveAt
+      ? new Date(parsedData.lastActiveAt).toISOString()
+      : r.updated_at || r.created_at;
+
+    return {
+      sessionId: r.session_id,
+      ipAddress: r.ip_address,
+      userAgent: r.user_agent,
+      deviceInfo: parseDeviceInfo(r.user_agent),
+      createdAt: r.created_at,
+      lastActiveAt: lastActive,
+      isCurrent: r.session_id === currentSessionId
+    };
+  });
+}
+
+/**
+ * Revoke specific session belonging to user
+ */
+export async function revokeUserSession(sessionId: string, userId: number, res?: Response): Promise<boolean> {
+  activeSessions.delete(sessionId);
+  const [result] = await db.execute(
+    'DELETE FROM sessions WHERE session_id = ? AND user_id = ?',
+    [sessionId, userId]
+  );
+
+  if (res) {
+    res.clearCookie(SESSION_COOKIE_NAME, {
+      httpOnly: true,
+      secure: env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/'
+    });
+  }
+
+  return Boolean(result && result.affectedRows > 0);
+}
+
+/**
+ * Revoke all other active sessions for user except current
+ */
+export async function revokeOtherSessions(currentSessionId: string, userId: number): Promise<number> {
+  for (const [sid, sess] of activeSessions.entries()) {
+    if (sess.userId === userId && sid !== currentSessionId) {
+      activeSessions.delete(sid);
+    }
+  }
+
+  const [result] = await db.execute(
+    'DELETE FROM sessions WHERE user_id = ? AND session_id != ?',
+    [userId, currentSessionId]
+  );
+
+  return result ? result.affectedRows : 0;
+}

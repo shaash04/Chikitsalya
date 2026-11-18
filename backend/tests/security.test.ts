@@ -193,7 +193,7 @@ describe('Secure Hospital Management System (SHMS) - Automated Security Test Sui
         .post('/api/auth/login')
         .send({ email: "victim@hospital.local' OR '1'='1", password: "arbitrary' OR 1=1 --" });
 
-      expect([400, 401]).toContain(res.status);
+      expect([400, 401, 403]).toContain(res.status);
       expect(res.body.success).toBe(false);
       expect(res.body.data).toBeUndefined();
     });

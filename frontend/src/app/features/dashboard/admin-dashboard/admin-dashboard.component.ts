@@ -16,6 +16,8 @@ import { HospitalService } from '../../../core/services/hospital.service';
           <p class="subtitle">Full System Oversight • Least Privilege Policy Enforcement • Security Auditing</p>
         </div>
         <div class="actions">
+          <a routerLink="/admin/security-center" class="btn btn-soc" style="margin-right: 8px;">🛡️ Launch Security Command Center</a>
+          <a routerLink="/admin/waf" class="btn btn-outline" style="margin-right: 8px;">🧱 WAF Simulator</a>
           <a routerLink="/admin/provision-doctor" class="btn btn-primary">➕ Provision Doctor Account</a>
           <a routerLink="/audit-logs" class="btn btn-outline" style="margin-left: 8px;">📜 View Audit Trail</a>
         </div>
@@ -60,7 +62,7 @@ import { HospitalService } from '../../../core/services/hospital.service';
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">🔒 System Security Control Status</h3>
-          <span class="badge badge-green">12 / 12 Active & Verified</span>
+          <span class="badge badge-green">16 / 16 Active & Verified</span>
         </div>
 
         <div class="security-features-grid">
@@ -127,6 +129,30 @@ import { HospitalService } from '../../../core/services/hospital.service';
               <div class="sec-desc">Patient record ownership validated on backend</div>
             </div>
           </div>
+
+          <div class="sec-status-item">
+            <span class="sec-dot green"></span>
+            <div>
+              <strong>Two-Factor Auth (2FA/TOTP)</strong>
+              <div class="sec-desc">RFC 6238 TOTP + AES-256 encrypted secrets & recovery codes</div>
+            </div>
+          </div>
+
+          <div class="sec-status-item">
+            <span class="sec-dot green"></span>
+            <div>
+              <strong>Server-Side Session Registry</strong>
+              <div class="sec-desc">Real-time device tracking & remote session revocation</div>
+            </div>
+          </div>
+
+          <div class="sec-status-item">
+            <span class="sec-dot green"></span>
+            <div>
+              <strong>Web App Firewall (WAF)</strong>
+              <div class="sec-desc">In-line regex payload analysis for SQLi, XSS, Path Traversal</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -185,6 +211,16 @@ import { HospitalService } from '../../../core/services/hospital.service';
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
       gap: 16px;
+    }
+    .btn-soc {
+      background: #0f172a;
+      color: #38bdf8;
+      border: 1px solid #0284c7;
+      font-weight: 700;
+    }
+    .btn-soc:hover {
+      background: #0284c7;
+      color: #ffffff;
     }
     .sec-status-item {
       display: flex;

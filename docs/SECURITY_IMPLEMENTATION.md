@@ -355,5 +355,138 @@ Committing database passwords or session secrets to a repository allows attacker
 
 ### How the Control Works
 1. At application boot, `backend/src/config/env.ts` reads environment variables and executes `envSchema.safeParse`.
-2. If any secret (e.g. `SESSION_SECRET`, `CSRF_SECRET`) is missing or shorter than 16 characters, the application aborts immediately with a clear diagnostic error.
+2. If any secret (e.g. `SESSION_SECRET`, `CSRF_SECRET`, `TWO_FACTOR_ENCRYPTION_KEY`) is missing or shorter than 16 characters, the application aborts immediately with a clear diagnostic error.
 3. Secrets are never exposed to the frontend build or API responses.
+
+---
+
+## Security Feature 13: Enterprise Security Command Center (SOC)
+
+### The Threat
+Blind spots in operational monitoring, delayed incident detection, uncoordinated response to coordinated brute-force or injection attacks, and lack of actionable telemetry for security administrators.
+
+### Why It Matters in Healthcare
+In medical infrastructure, advanced persistent threats (APTs) or malicious insiders may conduct distributed credential stuffing or horizontal privilege enumeration over hours. Without real-time aggregation, detection lags by days or weeks, compromising patient confidentiality.
+
+### Security Control Used
+- **Telemetry Aggregation Engine**: `securityAnalyticsService.ts` aggregates actual database audit logs across 24-hour windows.
+- **KPI Metrics Calculation**: Real-time evaluation of total requests analyzed, suspicious requests, blocked attacks, failed login attempts, active sessions, and critical alerts.
+- **Attack Activity Timeline**: Grouped hourly timestamps mapped to scalable vector graphics (SVG) polyline and gradient area charts.
+- **Threat Category & Severity Distribution**: Categorizes events into SQLi, XSS, Path Traversal, Brute-Force, IDOR, and RBAC with severity scoring (Low, Medium, High, Critical).
+- **Forensic Trace Inspector**: Complete metadata extraction preserving IP address, correlation ID, user-agent, actor role, and request outcome.
+- **RBAC Enforcement**: All `/api/admin/security/*` endpoints strictly require active administrator credentials (`requireAuthentication` + `requireRole('admin')`).
+
+### Implementation Files
+- `backend/src/services/securityAnalyticsService.ts`
+- `backend/src/controllers/securityCommandCenterController.ts`
+- `backend/src/routes/index.ts`
+- `frontend/src/app/core/services/security-command-center.service.ts`
+- `frontend/src/app/features/admin/security-command-center/security-command-center.component.ts`
+
+### How the Control Works
+1. An administrator visits `/admin/security-center`. The Angular client initiates parallel queries for `/api/admin/security/overview`, `/analytics`, `/events`, and `/alerts`.
+2. The service performs SQL queries on `audit_logs` and `sessions`, deriving metrics from real occurrences without synthetic or random counters.
+3. Live security events update automatically or upon manual refresh; clicking "Inspect Event" renders the forensic trace in a secure JSON modal.
+4. Alerts highlight repeated failed logins, blocked WAF attacks, and IDOR violations with immediate actionable links.
+
+---
+
+## Security Feature 14: Two-Factor Authentication (2FA / TOTP)
+
+### The Threat
+Credential stuffing, phished passwords, keystroke logging, and password reuse across breached third-party services.
+
+### Why It Matters in Healthcare
+If a physician's or administrator's password is stolen via phishing, single-factor authentication grants total access to clinical records, prescription workflows, or administrative accounts. Two-Factor Authentication ensures that even with a compromised password, the account cannot be breached without the physical possession factor.
+
+### Security Control Used
+- **Algorithm**: Time-Based One-Time Password (TOTP) algorithm per RFC 6238 (HMAC-SHA1, 30-second time-step window, 6-digit codes).
+- **At-Rest Secret Encryption**: TOTP secrets are encrypted at rest using AES-256-GCM authenticated encryption (`TWO_FACTOR_ENCRYPTION_KEY`) before saving into the database.
+- **Time Drift Tolerance**: A ±1 time step tolerance (previous, current, next 30-second window) accommodates minor client clock desynchronization while minimizing replay vulnerability.
+- **Emergency Backup Recovery Codes**: 8 single-use, 10-character alphanumeric recovery codes generated during enrollment, cryptographically hashed with SHA-256 before storage, and permanently consumed upon use.
+- **Atomic Two-Step Authentication Gate**:
+  - Step 1: `/api/auth/login` checks password. If 2FA is enabled, it returns `requires2FA: true` and an HMAC-signed temporary token (`tempToken`) valid for 5 minutes. NO session cookie is issued.
+  - Step 2: `/api/auth/login/2fa` validates the temporary token and either the 6-digit TOTP code or a recovery code. Only then is the signed `shms_session` cookie established.
+
+### Implementation Files
+- `backend/src/utils/totp.ts`
+- `backend/src/services/authService.ts`
+- `backend/src/controllers/authController.ts`
+- `backend/src/middleware/sessionAuth.ts`
+- `frontend/src/app/features/account-security/account-security.component.ts`
+- `frontend/src/app/features/auth/login/login.component.ts`
+
+### How the Control Works
+1. Users navigate to `/account/security` and click "Enable Two-Factor Authentication".
+2. The server generates an RFC 6238 Base32 secret and an `otpauth://` URI, rendering a high-contrast QR code via `qrcode`.
+3. The user scans the QR code with Google Authenticator or Microsoft Authenticator and enters the 6-digit code to confirm ownership.
+4. The server validates the code, encrypts the secret using AES-256-GCM, generates 8 hashed recovery codes, and saves them atomically in the database.
+5. On subsequent logins, after submitting valid credentials, the user is redirected to the 2FA verification challenge screen.
+
+---
+
+## Security Feature 15: Active Session & Device Management
+
+### The Threat
+Stale sessions remaining active on public hospital workstations, unmonitored persistent logins, session theft, and inability to revoke compromised devices remotely.
+
+### Why It Matters in Healthcare
+Doctors and nurses frequently move between exam room terminals, nurses' stations, and personal mobile devices. If a physician leaves a terminal signed in, any subsequent room occupant could read or modify patient records.
+
+### Security Control Used
+- **Server-Side Session Registry**: Every session is tracked in the `sessions` table with user ID, creation timestamp, last activity timestamp, IP address, and user-agent string.
+- **Device & Browser Telemetry**: Backend parser (`parseDeviceInfo`) extracts the client's browser (Chrome, Firefox, Safari, Edge) and operating system (Windows, macOS, Linux, Android, iOS) from the `User-Agent` header.
+- **Current Device Recognition**: Compares the request's active session token against the registry to flag the user's active workstation with a distinct "Current Device" badge.
+- **Granular Remote Revocation**: Users can terminate individual suspicious sessions (`DELETE /api/auth/sessions/:sessionId`) or invoke "Revoke All Other Sessions" (`DELETE /api/auth/sessions/other`).
+- **Real-Time Revocation Enforcement**: Session validation middleware verifies the database registry on every incoming API call; revoked sessions are rejected immediately with HTTP 401.
+
+### Implementation Files
+- `backend/src/middleware/sessionAuth.ts`
+- `backend/src/controllers/authController.ts`
+- `frontend/src/app/features/account-security/account-security.component.ts`
+- `backend/tests/twoFactorAndSessions.test.ts`
+
+### How the Control Works
+1. On each authenticated request, `sessionAuth` updates `last_activity` in the database.
+2. The user inspects active devices in `/account/security`.
+3. Clicking "Revoke Session" deletes the session record from the database.
+4. Any subsequent request presenting that session cookie is immediately rejected with HTTP 401, forcing an immediate logout on that device.
+
+---
+
+## Security Feature 16: Web Application Firewall (WAF) Simulator
+
+### The Threat
+Web application exploits, automated vulnerability scanners, remote command injection, SQL injection probes, and directory traversal attempts hitting backend endpoints before application logic executes.
+
+### Why It Matters in Healthcare
+Even with parameterized queries and output escaping, an educational in-line WAF provides defense-in-depth: detecting and halting suspicious payloads at the earliest middleware stage, generating actionable security telemetry, and protecting unpatched application endpoints.
+
+### Security Control Used
+- **In-Line Request Inspection Middleware**: Intercepts all incoming HTTP requests before routing. Recursively scans query strings, headers, and request body payloads against specialized regex detection signatures:
+  - `WAF-SQLI-001`: Detects `UNION SELECT`, `' OR '1'='1`, `exec xp_`, `benchmark()`, `sleep()`.
+  - `WAF-XSS-002`: Detects `<script>`, `javascript:`, inline event handlers (`onerror=`, `onload=`, `onclick=`).
+  - `WAF-PATH-003`: Detects `../`, `..\`, `/etc/passwd`, `win.ini`, `system32`.
+  - `WAF-CMD-004`: Detects `; cat `, `| nc `, `&& rm -rf`, `powershell -enc`.
+  - `WAF-PROTO-005`: Detects `php://filter`, `data://text`, `expect://`.
+- **Sensitive Field Exclusion**: Critical authentication parameters (`password`, `otpCode`, `twoFactorCode`, `recoveryCode`, `csrfToken`, `secret`) are strictly excluded from inspection and logging to preserve zero-credential exposure.
+- **Configurable Operating Modes**:
+  - `BLOCK`: Returns HTTP 403 Forbidden with `WAF_REQUEST_BLOCKED` and halts request propagation.
+  - `DETECT_ONLY`: Logs the suspicious event to `audit_logs` but allows the request to pass to underlying handlers for forensic observation.
+- **Administrative Control Console**: Administrators can toggle rules on/off and switch operating modes via `/admin/waf`.
+- **Attack Simulation Sandbox**: Integrated in the Security Demonstration Center (`/security-demo`) for safe verification of WAF detection without triggering real exploit vulnerabilities.
+
+### Implementation Files
+- `backend/src/services/wafService.ts`
+- `backend/src/middleware/wafMiddleware.ts`
+- `backend/src/controllers/wafController.ts`
+- `frontend/src/app/core/services/waf.service.ts`
+- `frontend/src/app/features/admin/waf-management/waf-management.component.ts`
+- `frontend/src/app/features/security-demo/security-demo-center/security-demo-center.component.ts`
+
+### How the Control Works
+1. An incoming request arrives at Express.
+2. `wafMiddleware` passes sanitized request values to `wafService.inspectRequest(req)`.
+3. If an active rule in `BLOCK` mode matches, the request is intercepted immediately: an audit log entry is written, and HTTP 403 Forbidden is returned with the matched rule details.
+4. If in `DETECT_ONLY` mode, an audit entry is logged and `next()` is called.
+5. Benign medical notes (e.g. blood pressure, prescription instructions) pass through cleanly without false-positive blocks.

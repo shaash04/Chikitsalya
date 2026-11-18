@@ -63,18 +63,83 @@ export class AuthService {
   }
 
   login(credentials: { email: string; password: string }): Observable<any> {
-    return this.http.post<{ success: boolean; data: { user: User } }>(
+    return this.http.post<{ success: boolean; data: { user: User; requires2FA?: boolean; tempToken?: string } }>(
       `${this.apiUrl}/auth/login`,
       credentials,
       { withCredentials: true }
     ).pipe(
       tap(res => {
-        if (res && res.success && res.data.user) {
+        if (res && res.success && res.data && !res.data.requires2FA && res.data.user) {
           this.currentUser.set(res.data.user);
           this.refreshCsrfToken().subscribe();
           this.redirectBasedOnRole(res.data.user.role);
         }
       })
+    );
+  }
+
+  loginVerify2FA(tempToken: string, code: string, isRecoveryCode: boolean = false): Observable<any> {
+    return this.http.post<{ success: boolean; data: { user: User } }>(
+      `${this.apiUrl}/auth/login/2fa`,
+      { tempToken, code, isRecoveryCode },
+      { withCredentials: true }
+    ).pipe(
+      tap(res => {
+        if (res && res.success && res.data?.user) {
+          this.currentUser.set(res.data.user);
+          this.refreshCsrfToken().subscribe();
+          this.redirectBasedOnRole(res.data.user.role);
+        }
+      })
+    );
+  }
+
+  get2FAStatus(): Observable<{ success: boolean; data: { enabled: boolean; hasRecoveryCodes: boolean } }> {
+    return this.http.get<{ success: boolean; data: { enabled: boolean; hasRecoveryCodes: boolean } }>(
+      `${this.apiUrl}/auth/2fa/status`,
+      { withCredentials: true }
+    );
+  }
+
+  setup2FA(): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/auth/2fa/setup`, {}, { withCredentials: true });
+  }
+
+  enable2FA(secret: string, code: string, recoveryCodes: any[]): Observable<any> {
+    return this.http.post<any>(
+      `${this.apiUrl}/auth/2fa/enable`,
+      { secret, code, recoveryCodes },
+      { withCredentials: true }
+    );
+  }
+
+  disable2FA(password: string, code: string): Observable<any> {
+    return this.http.post<any>(
+      `${this.apiUrl}/auth/2fa/disable`,
+      { password, code },
+      { withCredentials: true }
+    );
+  }
+
+  getActiveSessions(): Observable<{ success: boolean; data: any[] }> {
+    return this.http.get<{ success: boolean; data: any[] }>(
+      `${this.apiUrl}/auth/sessions`,
+      { withCredentials: true }
+    );
+  }
+
+  revokeSession(sessionId: string): Observable<any> {
+    return this.http.delete<any>(
+      `${this.apiUrl}/auth/sessions/${sessionId}`,
+      { withCredentials: true }
+    );
+  }
+
+  revokeOtherSessions(): Observable<any> {
+    return this.http.post<any>(
+      `${this.apiUrl}/auth/sessions/revoke-others`,
+      {},
+      { withCredentials: true }
     );
   }
 

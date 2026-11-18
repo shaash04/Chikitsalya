@@ -2,14 +2,14 @@
 
 **System**: Secure Hospital Management System (SHMS)  
 **Academic Course**: 21CSE438T - Web Security  
-**Test Framework**: Vitest v3.0.7 & Supertest v7.0.0  
-**Status**: 21 / 21 Tests Passed (100% Pass Rate)
+**Test Framework**: Vitest v3.2.7 & Supertest v7.0.0  
+**Status**: 57 / 57 Tests Passed (100% Pass Rate)
 
 ---
 
 ## 1. Automated Test Execution Summary
 
-The automated security test suite exercises all 12 core controls in isolation against realistic threat vectors.
+The automated security test suite comprises 4 comprehensive test suites exercising all 16 defense-in-depth controls in isolation against realistic threat vectors.
 
 ### Test Command
 ```powershell
@@ -21,34 +21,16 @@ npx vitest run
 
 ### Verified Test Run Output
 ```text
- RUN  v3.2.7 C:/Users/tshal/Downloads/CHIKITSALYA/backend
+ RUN  v3.2.7 E:/Chikitsalaya/Chikitsalya/backend
 
- ✓ tests/security.test.ts (21 tests) 2421ms
-   ✓ should successfully authenticate with valid credentials and return httpOnly session cookie
-   ✓ should reject invalid credentials with generic error message (anti-account enumeration)
-   ✓ should reject nonexistent email with identical generic error to prevent account discovery
-   ✓ should reject unauthenticated requests to protected endpoints with 401
-   ✓ should invalidate session and clear cookie upon logout
-   ✓ should prevent patient from accessing administrator APIs (HTTP 403)
-   ✓ should prevent doctor from accessing administrator user management APIs (HTTP 403)
-   ✓ should allow administrator to access admin user management APIs (HTTP 200)
-   ✓ should allow Patient 1 (John Doe) to view their own medical record #1
-   ✓ should DENY Patient 1 (John Doe) from accessing Patient 2 (Jane Smith) record #3 (IDOR Prevented)
-   ✓ should reject SQL injection payload in login without altering SQL query structure
-   ✓ should safely execute parameterized query via security demo without altering SQL syntax
-   ✓ should issue a cryptographically signed CSRF token with cookie and JSON
-   ✓ should reject state-changing request (POST appointment) when X-CSRF-Token header is missing
-   ✓ should accept state-changing request when valid X-CSRF-Token header is attached
-   ✓ should attach expected Helmet security headers to all responses
-   ✓ should escape dangerous HTML tags in input via security demo test
-   ✓ should reject malformed patient registration data with 400 Bad Request
-   ✓ should reject invalid appointment ID with 400 validation error and suppress stack traces
-   ✓ should throttle requests and return HTTP 429 when rate limit threshold is exceeded
-   ✓ should record audit events in database and allow admin inspection
+ ✓ tests/securityCommandCenter.test.ts (11 tests) 1428ms
+ ✓ tests/waf.test.ts (12 tests) 1447ms
+ ✓ tests/security.test.ts (21 tests) 3028ms
+ ✓ tests/twoFactorAndSessions.test.ts (13 tests) 3053ms
 
- Test Files  1 passed (1)
-      Tests  21 passed (21)
-   Duration  4.61s
+ Test Files  4 passed (4)
+      Tests  57 passed (57) - 100% Pass Rate
+   Duration  5.97s
 ```
 
 ---
@@ -160,4 +142,104 @@ npx vitest run
 - **TC-LOG-01 (Audit Trail Inspection)**:
   - Action: Query `GET /api/audit-logs` as administrator.
   - Expected: HTTP 200 with immutable database log entries containing IP, actor, correlation ID, and sanitized metadata without passwords.
+  - Result: **PASSED**
+
+### Suite 10: Security Command Center & Threat Analytics (11 Tests)
+- **TC-SOC-01 (RBAC Protection)**:
+  - Action: Unauthenticated or non-admin request to `/api/admin/security/overview`.
+  - Expected: HTTP 401 / 403 Forbidden.
+  - Result: **PASSED**
+- **TC-SOC-02 (Admin Access Allowed)**:
+  - Action: Authenticated administrator requests `/api/admin/security/overview`.
+  - Expected: HTTP 200 with 6 real KPI metrics calculated from database.
+  - Result: **PASSED**
+- **TC-SOC-03 (Threat Analytics)**:
+  - Action: Query `/api/admin/security/analytics`.
+  - Expected: HTTP 200 with 24h timeline points, threat categories distribution, severity breakdown, and login ratio.
+  - Result: **PASSED**
+- **TC-SOC-04 (Live Event Filtering)**:
+  - Action: Query `/api/admin/security/events?severity=CRITICAL` and `?category=SQL_INJECTION`.
+  - Expected: Events correctly filtered and paginated from database audit table.
+  - Result: **PASSED**
+- **TC-SOC-05 (Actionable Security Alerts)**:
+  - Action: Query `/api/admin/security/alerts`.
+  - Expected: Returns structured active alerts for repeated auth failures, unauthorized record access, and high-severity attacks.
+  - Result: **PASSED**
+
+### Suite 11: Two-Factor Authentication (2FA / TOTP) (8 Tests)
+- **TC-2FA-01 (Setup Secret & QR Generation)**:
+  - Action: `POST /api/auth/2fa/setup` as authenticated user.
+  - Expected: HTTP 200 returning Base32 secret string and valid `data:image/png;base64,...` QR code.
+  - Result: **PASSED**
+- **TC-2FA-02 (Invalid Code Rejection)**:
+  - Action: `POST /api/auth/2fa/enable` with invalid 6-digit code.
+  - Expected: HTTP 400 Bad Request (`INVALID_2FA_CODE`).
+  - Result: **PASSED**
+- **TC-2FA-03 (Valid Enable & Recovery Code Generation)**:
+  - Action: `POST /api/auth/2fa/enable` with valid TOTP code.
+  - Expected: HTTP 200 returning 8 single-use recovery codes; secret encrypted with AES-256-GCM in database.
+  - Result: **PASSED**
+- **TC-2FA-04 (Login Flow with 2FA Interception)**:
+  - Action: `POST /api/auth/login` for user with 2FA enabled.
+  - Expected: HTTP 200 with `{ requires2FA: true, tempToken: "..." }`; NO session cookie set.
+  - Result: **PASSED**
+- **TC-2FA-05 (2FA Login Verification with TOTP)**:
+  - Action: `POST /api/auth/login/2fa` with valid temporary token and TOTP code.
+  - Expected: HTTP 200 with signed `shms_session` cookie issued.
+  - Result: **PASSED**
+- **TC-2FA-06 (Single-Use Recovery Code & Reuse Rejection)**:
+  - Action: Verify login using recovery code; attempt second login using identical code.
+  - Expected: First login succeeds (200); second login fails (400 `INVALID_2FA_CODE`).
+  - Result: **PASSED**
+- **TC-2FA-07 (Secure Disable)**:
+  - Action: `POST /api/auth/2fa/disable` requiring both current password and valid OTP.
+  - Expected: 2FA disabled in database and recovery codes purged.
+  - Result: **PASSED**
+
+### Suite 12: Active Session & Device Management (5 Tests)
+- **TC-SES-01 (Session Registry Listing)**:
+  - Action: `GET /api/auth/sessions`.
+  - Expected: HTTP 200 with active session records, parsed OS/browser (`Windows`, `Chrome`), IP address, and `isCurrent: true` badge.
+  - Result: **PASSED**
+- **TC-SES-02 (Individual Session Revocation)**:
+  - Action: `DELETE /api/auth/sessions/:sessionId` targeting a secondary session.
+  - Expected: HTTP 200; targeted session removed from database registry.
+  - Result: **PASSED**
+- **TC-SES-03 (Revoked Session Rejection Enforcement)**:
+  - Action: Subsequent API request presenting the revoked session cookie.
+  - Expected: HTTP 401 Unauthorized (`SESSION_INVALID_OR_REVOKED`).
+  - Result: **PASSED**
+- **TC-SES-04 (Revoke All Other Sessions)**:
+  - Action: `DELETE /api/auth/sessions/other`.
+  - Expected: HTTP 200; all sessions except current device destroyed.
+  - Result: **PASSED**
+
+### Suite 13: Web Application Firewall (WAF) Simulator (12 Tests)
+- **TC-WAF-01 (SQL Injection Detection & Block)**:
+  - Action: GET `/api/doctors?search=' UNION SELECT username, password FROM users --`.
+  - Expected: HTTP 403 Forbidden (`WAF_REQUEST_BLOCKED`) with rule `WAF-SQLI-001`.
+  - Result: **PASSED**
+- **TC-WAF-02 (XSS Payload Detection & Block)**:
+  - Action: POST request containing `<script>alert('XSS')</script>`.
+  - Expected: HTTP 403 Forbidden with rule `WAF-XSS-002`.
+  - Result: **PASSED**
+- **TC-WAF-03 (Path Traversal Detection & Block)**:
+  - Action: GET request with parameter `../../../../etc/passwd` or `..\..\win.ini`.
+  - Expected: HTTP 403 Forbidden with rule `WAF-PATH-003`.
+  - Result: **PASSED**
+- **TC-WAF-04 (False-Positive Handling on Benign Medical Text)**:
+  - Action: POST clinical record with text: `"Patient denies chest pain; scheduled follow-up in 2 weeks. Prescribe Amoxicillin 500mg."`.
+  - Expected: WAF permits request without blocking (200 / 201).
+  - Result: **PASSED**
+- **TC-WAF-05 (Admin Role Restriction on Rule Updates)**:
+  - Action: Non-admin or unauthenticated PATCH to `/api/admin/waf/rules/WAF-SQLI-001`.
+  - Expected: HTTP 401 / 403 Forbidden.
+  - Result: **PASSED**
+- **TC-WAF-06 (Dynamic Mode Toggle - DETECT_ONLY)**:
+  - Action: Admin updates rule to `DETECT_ONLY`; resubmits attack payload.
+  - Expected: WAF logs incident to `audit_logs` but allows request through (does not block).
+  - Result: **PASSED**
+- **TC-WAF-07 (Attack Simulation Endpoint)**:
+  - Action: POST `/api/security-demo/test-waf` with attack string.
+  - Expected: HTTP 200 returning inspection diagnosis, matched rule ID, pattern, and defense explanation.
   - Result: **PASSED**

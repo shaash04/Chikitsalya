@@ -78,3 +78,34 @@ export const idParamSchema = z.object({
 export const searchSchema = z.object({
   q: z.string().trim().max(100).optional()
 });
+
+// =============================================================================
+// Two-Factor Authentication & Session Management Schemas
+// =============================================================================
+
+export const enable2FASchema = z.object({
+  secret: z.string().min(16).max(64),
+  code: z.string().trim().regex(/^\d{6}$/, 'Code must be a 6-digit numeric string'),
+  recoveryCodes: z.array(
+    z.object({
+      hash: z.string(),
+      used: z.boolean(),
+      usedAt: z.string().nullable()
+    })
+  ).min(1, 'Recovery codes array is required')
+});
+
+export const verifyLogin2FASchema = z.object({
+  tempToken: z.string().min(10, 'Temporary 2FA token is required'),
+  code: z.string().trim().min(4, 'Code is required').max(30),
+  isRecoveryCode: z.boolean().optional().default(false)
+});
+
+export const disable2FASchema = z.object({
+  password: z.string().min(1, 'Current password is required to disable 2FA'),
+  code: z.string().trim().min(4, 'Verification code or recovery code is required').max(30)
+});
+
+export const sessionIdParamSchema = z.object({
+  sessionId: z.string().min(10).max(128)
+});

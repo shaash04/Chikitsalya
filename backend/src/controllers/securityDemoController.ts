@@ -112,6 +112,42 @@ export class SecurityDemoController {
         procedure: 'Inspect environment variable schema validation and secret isolation',
         expectedResult: 'Secrets stored in .env, validated at boot; never sent to client API',
         testAction: 'test-config'
+      },
+      {
+        id: 13,
+        name: 'Two-Factor Authentication (2FA)',
+        threat: 'Credential stuffing, compromised passwords, unauthorized account takeover',
+        file: 'backend/src/utils/totp.ts & backend/src/controllers/authController.ts',
+        procedure: 'Enroll with RFC 6238 TOTP authenticator app and verify 6-digit one-time code',
+        expectedResult: 'AES-256 encrypted secrets at rest; 8 hashed single-use emergency backup recovery codes',
+        testAction: 'test-2fa'
+      },
+      {
+        id: 14,
+        name: 'Active Session & Device Management',
+        threat: 'Stale sessions, lost/stolen device access, unmonitored persistent logins',
+        file: 'backend/src/middleware/sessionAuth.ts & backend/src/controllers/authController.ts',
+        procedure: 'Inspect server-side session registry, examine user-agent/IP details, trigger remote revocation',
+        expectedResult: 'Revoked sessions rejected immediately at backend middleware on subsequent requests',
+        testAction: 'test-sessions'
+      },
+      {
+        id: 15,
+        name: 'Web Application Firewall (WAF) Simulator',
+        threat: 'SQL injection, Cross-Site Scripting (XSS), Directory Traversal, Command Injection',
+        file: 'backend/src/middleware/wafMiddleware.ts & backend/src/services/wafService.ts',
+        procedure: 'Simulate exploit payloads against in-line regex inspection engine',
+        expectedResult: 'WAF intercepts payload before application layer; returns 403 WAF_REQUEST_BLOCKED and logs audit alert',
+        testAction: 'test-waf'
+      },
+      {
+        id: 16,
+        name: 'Security Command Center (SOC)',
+        threat: 'Lack of real-time situational awareness, slow incident detection and response',
+        file: 'backend/src/services/securityAnalyticsService.ts & frontend/src/app/features/admin/security-command-center',
+        procedure: 'Monitor threat telemetry, attack timeline, event distribution, and active alerts in real-time',
+        expectedResult: 'Live audit log aggregation with zero synthetic data; actionable alerts with root-cause traces',
+        testAction: 'test-soc'
       }
     ];
 

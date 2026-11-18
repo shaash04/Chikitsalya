@@ -92,6 +92,27 @@ export class UserRepository {
       [fullName.trim(), phone || null, userId]
     );
   }
+
+  async enableTwoFactor(userId: number, encryptedSecret: string, recoveryCodesJson: string): Promise<void> {
+    await db.execute(
+      'UPDATE users SET two_factor_enabled = 1, two_factor_secret = ?, recovery_codes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [encryptedSecret, recoveryCodesJson, userId]
+    );
+  }
+
+  async disableTwoFactor(userId: number): Promise<void> {
+    await db.execute(
+      'UPDATE users SET two_factor_enabled = 0, two_factor_secret = NULL, recovery_codes = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [userId]
+    );
+  }
+
+  async updateRecoveryCodes(userId: number, recoveryCodesJson: string): Promise<void> {
+    await db.execute(
+      'UPDATE users SET recovery_codes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [recoveryCodesJson, userId]
+    );
+  }
 }
 
 export const userRepository = new UserRepository();

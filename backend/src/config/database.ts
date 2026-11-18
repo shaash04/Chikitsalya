@@ -285,10 +285,178 @@ export async function initMemoryStore() {
     }
   ];
 
+  const nowTime = Date.now();
+  const formatTime = (offsetMs: number) => new Date(nowTime - offsetMs).toISOString();
+
   memoryStore.audit_logs = [
     {
+      id: 12,
+      timestamp: formatTime(2 * 60 * 1000),
+      actor_user_id: 1,
+      actor_username: 'admin_sys',
+      actor_role: 'admin',
+      event_type: 'AUTH_LOGIN_SUCCESS',
+      resource_type: 'USER',
+      resource_id: '1',
+      outcome: 'SUCCESS',
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      correlation_id: 'corr-seed-0012',
+      metadata: '{"role":"admin","method":"password"}'
+    },
+    {
+      id: 11,
+      timestamp: formatTime(15 * 60 * 1000),
+      actor_user_id: 4,
+      actor_username: 'johndoe',
+      actor_role: 'patient',
+      event_type: 'IDOR_RECORD_DENIED',
+      resource_type: 'MEDICAL_RECORD',
+      resource_id: 'rec-2026-103',
+      outcome: 'DENIED',
+      ip_address: '192.168.1.104',
+      user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+      correlation_id: 'corr-seed-0011',
+      metadata: '{"attemptedRecordId":"3","ownerPatientId":2,"requesterPatientId":1,"violation":"Cross-tenant horizontal privilege escalation attempted"}'
+    },
+    {
+      id: 10,
+      timestamp: formatTime(42 * 60 * 1000),
+      actor_user_id: null,
+      actor_username: 'attacker@botnet.xyz',
+      actor_role: 'GUEST',
+      event_type: 'RATE_LIMIT_EXCEEDED',
+      resource_type: 'AUTH_ENDPOINT',
+      resource_id: null,
+      outcome: 'DENIED',
+      ip_address: '198.51.100.23',
+      user_agent: 'python-requests/2.31.0',
+      correlation_id: 'corr-seed-0010',
+      metadata: '{"threshold":10,"windowMs":900000,"action":"IP blocked temporarily"}'
+    },
+    {
+      id: 9,
+      timestamp: formatTime(45 * 60 * 1000),
+      actor_user_id: null,
+      actor_username: 'admin@hospital.local',
+      actor_role: 'GUEST',
+      event_type: 'AUTH_LOGIN_THROTTLED',
+      resource_type: 'USER',
+      resource_id: '1',
+      outcome: 'DENIED',
+      ip_address: '198.51.100.23',
+      user_agent: 'python-requests/2.31.0',
+      correlation_id: 'corr-seed-0009',
+      metadata: '{"lockoutMinutesRemaining":15,"consecutiveFailures":10}'
+    },
+    {
+      id: 8,
+      timestamp: formatTime(48 * 60 * 1000),
+      actor_user_id: null,
+      actor_username: 'admin@hospital.local',
+      actor_role: 'GUEST',
+      event_type: 'AUTH_LOGIN_FAILURE',
+      resource_type: 'USER',
+      resource_id: '1',
+      outcome: 'FAILURE',
+      ip_address: '198.51.100.23',
+      user_agent: 'python-requests/2.31.0',
+      correlation_id: 'corr-seed-0008',
+      metadata: '{"reason":"Invalid credentials supplied"}'
+    },
+    {
+      id: 7,
+      timestamp: formatTime(2 * 3600 * 1000),
+      actor_user_id: 2,
+      actor_username: 'dr_sharma',
+      actor_role: 'doctor',
+      event_type: 'MEDICAL_RECORD_CREATE',
+      resource_type: 'MEDICAL_RECORD',
+      resource_id: 'rec-2026-101',
+      outcome: 'SUCCESS',
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      correlation_id: 'corr-seed-0007',
+      metadata: '{"diagnosis":"Primary Essential Hypertension (Stage 1)","patientId":1}'
+    },
+    {
+      id: 6,
+      timestamp: formatTime(3 * 3600 * 1000),
+      actor_user_id: 2,
+      actor_username: 'dr_sharma',
+      actor_role: 'doctor',
+      event_type: 'AUTH_LOGIN_SUCCESS',
+      resource_type: 'USER',
+      resource_id: '2',
+      outcome: 'SUCCESS',
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      correlation_id: 'corr-seed-0006',
+      metadata: '{"role":"doctor"}'
+    },
+    {
+      id: 5,
+      timestamp: formatTime(5 * 3600 * 1000),
+      actor_user_id: 4,
+      actor_username: 'johndoe',
+      actor_role: 'patient',
+      event_type: 'APPOINTMENT_CREATE',
+      resource_type: 'APPOINTMENT',
+      resource_id: 'apt-2026-001',
+      outcome: 'SUCCESS',
+      ip_address: '192.168.1.104',
+      user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+      correlation_id: 'corr-seed-0005',
+      metadata: '{"doctorId":1,"date":"2026-11-02"}'
+    },
+    {
+      id: 4,
+      timestamp: formatTime(6 * 3600 * 1000),
+      actor_user_id: 4,
+      actor_username: 'johndoe',
+      actor_role: 'patient',
+      event_type: 'AUTH_LOGIN_SUCCESS',
+      resource_type: 'USER',
+      resource_id: '4',
+      outcome: 'SUCCESS',
+      ip_address: '192.168.1.104',
+      user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)',
+      correlation_id: 'corr-seed-0004',
+      metadata: '{"role":"patient"}'
+    },
+    {
+      id: 3,
+      timestamp: formatTime(10 * 3600 * 1000),
+      actor_user_id: null,
+      actor_username: 'unknown@external.net',
+      actor_role: 'GUEST',
+      event_type: 'AUTH_LOGIN_FAILURE',
+      resource_type: 'USER',
+      resource_id: null,
+      outcome: 'FAILURE',
+      ip_address: '203.0.113.88',
+      user_agent: 'Mozilla/5.0 (X11; Linux x86_64)',
+      correlation_id: 'corr-seed-0003',
+      metadata: '{"reason":"Anti-enumeration generic rejection"}'
+    },
+    {
+      id: 2,
+      timestamp: formatTime(12 * 3600 * 1000),
+      actor_user_id: 1,
+      actor_username: 'admin_sys',
+      actor_role: 'admin',
+      event_type: 'ADMIN_USER_STATUS_CHANGE',
+      resource_type: 'USER',
+      resource_id: '2',
+      outcome: 'SUCCESS',
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      correlation_id: 'corr-seed-0002',
+      metadata: '{"targetUserId":2,"newActiveStatus":1}'
+    },
+    {
       id: 1,
-      timestamp: new Date().toISOString(),
+      timestamp: formatTime(24 * 3600 * 1000),
       actor_user_id: 1,
       actor_username: 'admin_sys',
       actor_role: 'admin',
@@ -303,13 +471,36 @@ export async function initMemoryStore() {
     }
   ];
 
+  const adminSessionData = {
+    sessionId: 'sess-active-admin-demo-001',
+    userId: 1,
+    username: 'admin_sys',
+    email: 'admin@hospital.local',
+    role: 'admin',
+    fullName: 'System Administrator',
+    createdAt: Date.now() - 3600000,
+    lastActiveAt: Date.now() - 120000
+  };
+  memoryStore.sessions = [
+    {
+      session_id: 'sess-active-admin-demo-001',
+      user_id: 1,
+      data: JSON.stringify(adminSessionData),
+      ip_address: '127.0.0.1',
+      user_agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
+      expires_at: new Date(Date.now() + 23 * 3600 * 1000).toISOString(),
+      created_at: new Date(Date.now() - 3600000).toISOString(),
+      updated_at: new Date(Date.now() - 120000).toISOString()
+    }
+  ];
+
   autoIncrementIds = {
     users: 6,
     patients: 3,
     doctors: 3,
     appointments: 4,
     medical_records: 4,
-    audit_logs: 2
+    audit_logs: 13
   };
 }
 
@@ -452,6 +643,43 @@ class MemoryDatabaseEngine implements IDatabase {
           if (user) {
             user.full_name = params[0];
             user.phone = params[1];
+            user.updated_at = new Date().toISOString();
+          }
+          return [{ affectedRows: 1 } as unknown as T, null];
+        }
+
+        // 6. Enable Two-Factor Authentication
+        if (trimmed.includes('TWO_FACTOR_ENABLED = 1')) {
+          const userId = Number(params[2]);
+          const user = memoryStore.users.find(u => u.id === userId);
+          if (user) {
+            user.two_factor_enabled = 1;
+            user.two_factor_secret = params[0];
+            user.recovery_codes = params[1];
+            user.updated_at = new Date().toISOString();
+          }
+          return [{ affectedRows: 1 } as unknown as T, null];
+        }
+
+        // 7. Disable Two-Factor Authentication
+        if (trimmed.includes('TWO_FACTOR_ENABLED = 0')) {
+          const userId = Number(params[0]);
+          const user = memoryStore.users.find(u => u.id === userId);
+          if (user) {
+            user.two_factor_enabled = 0;
+            user.two_factor_secret = null;
+            user.recovery_codes = null;
+            user.updated_at = new Date().toISOString();
+          }
+          return [{ affectedRows: 1 } as unknown as T, null];
+        }
+
+        // 8. Update Recovery Codes
+        if (trimmed.includes('RECOVERY_CODES = ?')) {
+          const userId = Number(params[1]);
+          const user = memoryStore.users.find(u => u.id === userId);
+          if (user) {
+            user.recovery_codes = params[0];
             user.updated_at = new Date().toISOString();
           }
           return [{ affectedRows: 1 } as unknown as T, null];
@@ -727,10 +955,18 @@ class MemoryDatabaseEngine implements IDatabase {
       }
       if (trimmed.startsWith('SELECT')) {
         let logs = [...memoryStore.audit_logs];
-        if (params.length > 0 && typeof params[0] === 'string' && params[0].length > 0) {
+        if (trimmed.includes('WHERE OUTCOME = ?') && params.length > 0) {
+          logs = logs.filter(l => l.outcome === params[0]);
+        } else if (trimmed.includes('WHERE EVENT_TYPE = ?') && params.length > 0) {
+          logs = logs.filter(l => l.event_type === params[0]);
+        } else if (params.length > 0 && typeof params[0] === 'string' && params[0].length > 0) {
           logs = logs.filter(l => l.event_type === params[0]);
         }
-        return [logs.slice(0, 100) as unknown as T, null];
+        let limit = 200;
+        if (params.length > 0 && typeof params[params.length - 1] === 'number') {
+          limit = params[params.length - 1];
+        }
+        return [logs.slice(0, limit) as unknown as T, null];
       }
     }
 
@@ -758,6 +994,22 @@ class MemoryDatabaseEngine implements IDatabase {
         const s = memoryStore.sessions.find(x => x.session_id === sid);
         return [(s ? [s] : []) as unknown as T, null];
       }
+      if (trimmed.startsWith('SELECT') && trimmed.includes('WHERE USER_ID = ?')) {
+        const uid = Number(params[0]);
+        const list = memoryStore.sessions.filter(s => Number(s.user_id) === uid);
+        return [list as unknown as T, null];
+      }
+      if (trimmed.startsWith('DELETE FROM SESSIONS WHERE USER_ID = ? AND SESSION_ID != ?')) {
+        const uid = Number(params[0]);
+        const sid = String(params[1]);
+        memoryStore.sessions = memoryStore.sessions.filter(s => Number(s.user_id) !== uid || s.session_id === sid);
+        return [{ affectedRows: 1 } as unknown as T, null];
+      }
+      if (trimmed.startsWith('DELETE FROM SESSIONS WHERE USER_ID = ?')) {
+        const uid = Number(params[0]);
+        memoryStore.sessions = memoryStore.sessions.filter(s => Number(s.user_id) !== uid);
+        return [{ affectedRows: 1 } as unknown as T, null];
+      }
       if (trimmed.startsWith('DELETE FROM SESSIONS WHERE SESSION_ID = ?')) {
         const sid = String(params[0]);
         memoryStore.sessions = memoryStore.sessions.filter(s => s.session_id !== sid);
@@ -769,6 +1021,14 @@ class MemoryDatabaseEngine implements IDatabase {
     // DASHBOARD COUNTS
     // -------------------------------------------------------------------------
     if (trimmed.includes('COUNT(')) {
+      if (trimmed.includes('FROM SESSIONS')) {
+        const now = new Date().toISOString();
+        const active = memoryStore.sessions.filter(s => !s.expires_at || s.expires_at > now).length;
+        return [[{ count: active }] as unknown as T, null];
+      }
+      if (trimmed.includes('FROM AUDIT_LOGS')) {
+        return [[{ count: memoryStore.audit_logs.length }] as unknown as T, null];
+      }
       if (trimmed.includes('FROM PATIENTS')) {
         return [[{ count: memoryStore.patients.length }] as unknown as T, null];
       }

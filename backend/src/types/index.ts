@@ -17,6 +17,9 @@ export interface User {
   failed_login_attempts: number;
   locked_until?: string | null;
   last_login_at?: string | null;
+  two_factor_enabled?: number;
+  two_factor_secret?: string | null;
+  recovery_codes?: string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -124,3 +127,90 @@ export interface SessionData {
   createdAt: number;
   lastActiveAt: number;
 }
+
+// =============================================================================
+// Security Command Center & Threat Analytics Types
+// =============================================================================
+
+export type SecuritySeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type SecurityActionTaken = 'ALLOWED' | 'BLOCKED' | 'REJECTED';
+export type SecurityCategory = 'AUTHENTICATION' | 'ACCESS_CONTROL' | 'INJECTION_WAF' | 'RATE_LIMIT' | 'ADMIN' | 'GENERAL';
+
+export interface SecurityEventItem {
+  id: number;
+  timestamp: string;
+  eventType: string;
+  category: SecurityCategory;
+  actorUsername: string;
+  actorRole: string;
+  ipAddress: string;
+  userAgent?: string | null;
+  resourceType: string;
+  resourceId?: string | null;
+  outcome: 'SUCCESS' | 'FAILURE' | 'DENIED';
+  severity: SecuritySeverity;
+  actionTaken: SecurityActionTaken;
+  correlationId: string;
+  details: string;
+  metadata?: Record<string, any> | null;
+}
+
+export interface SecurityOverviewMetrics {
+  totalRequestsAnalyzed: number;
+  suspiciousRequestsDetected: number;
+  blockedAttacks: number;
+  failedLoginAttempts: number;
+  activeUserSessions: number;
+  criticalSecurityAlerts: number;
+  systemStatus: 'OPTIMAL' | 'ELEVATED' | 'CRITICAL';
+}
+
+export interface TimelineDataPoint {
+  timeLabel: string;
+  timestamp: string;
+  totalEvents: number;
+  blockedAttacks: number;
+  suspiciousEvents: number;
+}
+
+export interface CategoryDistribution {
+  category: string;
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface SeverityDistribution {
+  severity: SecuritySeverity;
+  count: number;
+  percentage: number;
+}
+
+export interface LoginStatistics {
+  totalAttempts: number;
+  successfulLogins: number;
+  failedLogins: number;
+  lockoutsTriggered: number;
+  failureRatePercentage: number;
+}
+
+export interface ThreatAnalytics {
+  timeline: TimelineDataPoint[];
+  categories: CategoryDistribution[];
+  severities: SeverityDistribution[];
+  loginStats: LoginStatistics;
+}
+
+export interface SecurityAlert {
+  id: string;
+  title: string;
+  severity: SecuritySeverity;
+  category: SecurityCategory;
+  timestamp: string;
+  sourceIp: string;
+  targetAccount?: string | null;
+  description: string;
+  recommendation: string;
+  eventCount: number;
+}
+

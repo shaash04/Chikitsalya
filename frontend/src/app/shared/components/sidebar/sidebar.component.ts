@@ -38,6 +38,9 @@ import { AuthService } from '../../../core/services/auth.service';
           <a routerLink="/patient/profile" routerLinkActive="active" class="nav-item">
             <span class="nav-icon">👤</span> Profile & Password
           </a>
+          <a routerLink="/account/security" routerLinkActive="active" class="nav-item">
+            <span class="nav-icon">🔐</span> Account Security (2FA)
+          </a>
         </nav>
       </ng-container>
 
@@ -60,6 +63,9 @@ import { AuthService } from '../../../core/services/auth.service';
           <a routerLink="/doctors" routerLinkActive="active" class="nav-item">
             <span class="nav-icon">👥</span> Medical Staff
           </a>
+          <a routerLink="/account/security" routerLinkActive="active" class="nav-item">
+            <span class="nav-icon">🔐</span> Account Security (2FA)
+          </a>
         </nav>
       </ng-container>
 
@@ -67,6 +73,12 @@ import { AuthService } from '../../../core/services/auth.service';
       <ng-container *ngIf="auth.userRole() === 'admin'">
         <div class="sidebar-section-title">Administration</div>
         <nav class="nav-links">
+          <a routerLink="/admin/security-center" routerLinkActive="active" class="nav-item highlight-security">
+            <span class="nav-icon">🛡️</span> Security Command Center
+          </a>
+          <a routerLink="/admin/waf" routerLinkActive="active" class="nav-item">
+            <span class="nav-icon">🧱</span> WAF Management
+          </a>
           <a routerLink="/admin/dashboard" routerLinkActive="active" class="nav-item">
             <span class="nav-icon">🏛️</span> Control Center
           </a>
@@ -84,6 +96,9 @@ import { AuthService } from '../../../core/services/auth.service';
           </a>
           <a routerLink="/audit-logs" routerLinkActive="active" class="nav-item">
             <span class="nav-icon">📜</span> Security Audit Logs
+          </a>
+          <a routerLink="/account/security" routerLinkActive="active" class="nav-item">
+            <span class="nav-icon">🔐</span> Account Security (2FA)
           </a>
         </nav>
       </ng-container>
@@ -201,6 +216,17 @@ import { AuthService } from '../../../core/services/auth.service';
       background: #e0f2fe;
       color: #0369a1;
       font-weight: 700;
+    }
+    .highlight-security {
+      background: #0f172a;
+      color: #38bdf8 !important;
+      border: 1px solid #1e293b;
+      font-weight: 600;
+    }
+    .highlight-security:hover, .highlight-security.active {
+      background: #1e293b;
+      color: #7dd3fc !important;
+      border-color: #0284c7;
     }
     .demo-item {
       background: #f0fdf4;

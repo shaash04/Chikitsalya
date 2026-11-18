@@ -3,7 +3,18 @@ import { userRepository } from '../repositories/userRepository.js';
 import { patientRepository } from '../repositories/patientRepository.js';
 import { auditLogRepository } from '../repositories/auditLogRepository.js';
 import { hashPassword, verifyPassword, validatePasswordStrength } from '../utils/security.js';
-import { createSession, destroySession } from '../middleware/sessionAuth.js';
+import { createSession, destroySession, signTwoFactorPendingToken, verifyTwoFactorPendingToken } from '../middleware/sessionAuth.js';
+import {
+  generateTotpSecret,
+  encryptTotpSecret,
+  decryptTotpSecret,
+  verifyTotpCode,
+  getTotpUri,
+  generateQrCodeDataUrl,
+  generateRecoveryCodes,
+  consumeRecoveryCode,
+  StoredRecoveryCode
+} from '../utils/totp.js';
 import { SafeUser } from '../types/index.js';
 import { Response, Request } from 'express';
 import { env } from '../config/env.js';
@@ -27,7 +38,11 @@ export class AuthService {
    * - Session regeneration
    * - Generic error messaging (anti-account enumeration)
    */
-  async login(credentials: { email: string; password: string }, req: Request, res: Response): Promise<{ user: SafeUser }> {
+  async login(
+    credentials: { email: string; password: string },
+    req: Request,
+    res: Response
+  ): Promise<{ user: SafeUser; requires2FA?: boolean; tempToken?: string }> {
     const correlationId = req.correlationId || uuidv4();
     const ip = req.ip || '127.0.0.1';
     const email = credentials.email.toLowerCase().trim();
@@ -131,6 +146,41 @@ export class AuthService {
 
     // Login successful: reset failed attempts
     await userRepository.resetFailedAttempts(user.id);
+
+    // If 2FA is enabled for this account, issue temporary pending token and do NOT issue session cookie yet
+    if (Number(user.two_factor_enabled) === 1) {
+      const tempToken = signTwoFactorPendingToken(user.id, user.email);
+      await auditLogRepository.record({
+        actorUserId: user.id,
+        actorUsername: user.username,
+        actorRole: user.role,
+        eventType: 'AUTH_2FA_CHALLENGE',
+        resourceType: 'USER',
+        resourceId: String(user.id),
+        outcome: 'SUCCESS',
+        ipAddress: ip,
+        userAgent: req.headers['user-agent'],
+        correlationId,
+        metadata: { message: 'Primary credentials verified. Awaiting 2FA verification.' }
+      });
+
+      const safeUser: SafeUser = {
+        id: user.id,
+        uuid: user.uuid,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        full_name: user.full_name,
+        fullName: user.full_name,
+        phone: user.phone,
+        is_active: user.is_active,
+        last_login_at: user.last_login_at,
+        created_at: user.created_at,
+        updated_at: user.updated_at
+      };
+
+      return { user: safeUser, requires2FA: true, tempToken };
+    }
 
     // Regenerate session identifier
     await createSession(
@@ -388,6 +438,264 @@ export class AuthService {
     return {
       resetCount: demoEmails.length,
       accounts: demoEmails
+    };
+  }
+
+  /**
+   * Verify TOTP code or recovery code for a pending 2FA login
+   */
+  async loginVerify2FA(
+    data: { tempToken: string; code: string; isRecoveryCode?: boolean },
+    req: Request,
+    res: Response
+  ): Promise<{ user: SafeUser }> {
+    const tokenData = verifyTwoFactorPendingToken(data.tempToken);
+    if (!tokenData) {
+      throw new Error('INVALID_OR_EXPIRED_2FA_TOKEN');
+    }
+
+    const user = await userRepository.findById(tokenData.userId);
+    if (!user || Number(user.is_active) !== 1) {
+      throw new Error('ACCOUNT_INACTIVE');
+    }
+
+    const correlationId = req.correlationId || uuidv4();
+    const ip = req.ip || '127.0.0.1';
+
+    if (data.isRecoveryCode) {
+      // Recovery code path
+      const storedCodes: StoredRecoveryCode[] = user.recovery_codes ? JSON.parse(user.recovery_codes) : [];
+      const result = consumeRecoveryCode(data.code, storedCodes);
+
+      if (!result.valid) {
+        await auditLogRepository.record({
+          actorUserId: user.id,
+          actorUsername: user.username,
+          actorRole: user.role,
+          eventType: 'AUTH_2FA_RECOVERY_FAILURE',
+          resourceType: 'USER',
+          resourceId: String(user.id),
+          outcome: 'FAILURE',
+          ipAddress: ip,
+          userAgent: req.headers['user-agent'],
+          correlationId,
+          metadata: { reason: 'Invalid or already consumed recovery code' }
+        });
+        throw new Error('INVALID_RECOVERY_CODE');
+      }
+
+      // Update remaining recovery codes atomically in DB
+      await userRepository.updateRecoveryCodes(user.id, JSON.stringify(result.updatedCodes));
+
+      await auditLogRepository.record({
+        actorUserId: user.id,
+        actorUsername: user.username,
+        actorRole: user.role,
+        eventType: 'AUTH_2FA_RECOVERY_SUCCESS',
+        resourceType: 'USER',
+        resourceId: String(user.id),
+        outcome: 'SUCCESS',
+        ipAddress: ip,
+        userAgent: req.headers['user-agent'],
+        correlationId,
+        metadata: { message: 'Authenticated via single-use backup recovery code' }
+      });
+    } else {
+      // Standard TOTP verification path
+      if (!user.two_factor_secret) {
+        throw new Error('2FA_NOT_CONFIGURED');
+      }
+
+      let plainSecret: string;
+      try {
+        plainSecret = decryptTotpSecret(user.two_factor_secret);
+      } catch {
+        throw new Error('2FA_SECRET_DECRYPT_FAILED');
+      }
+
+      const isValid = verifyTotpCode(plainSecret, data.code);
+      if (!isValid) {
+        await auditLogRepository.record({
+          actorUserId: user.id,
+          actorUsername: user.username,
+          actorRole: user.role,
+          eventType: 'AUTH_2FA_FAILURE',
+          resourceType: 'USER',
+          resourceId: String(user.id),
+          outcome: 'FAILURE',
+          ipAddress: ip,
+          userAgent: req.headers['user-agent'],
+          correlationId,
+          metadata: { reason: 'Invalid 6-digit TOTP code' }
+        });
+        throw new Error('INVALID_2FA_CODE');
+      }
+
+      await auditLogRepository.record({
+        actorUserId: user.id,
+        actorUsername: user.username,
+        actorRole: user.role,
+        eventType: 'AUTH_2FA_SUCCESS',
+        resourceType: 'USER',
+        resourceId: String(user.id),
+        outcome: 'SUCCESS',
+        ipAddress: ip,
+        userAgent: req.headers['user-agent'],
+        correlationId,
+        metadata: { message: 'TOTP authentication verified successfully' }
+      });
+    }
+
+    // Now establish full session
+    await createSession(
+      res,
+      {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        fullName: user.full_name
+      },
+      req
+    );
+
+    const safeUser: SafeUser = {
+      id: user.id,
+      uuid: user.uuid,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      full_name: user.full_name,
+      fullName: user.full_name,
+      phone: user.phone,
+      is_active: user.is_active,
+      last_login_at: user.last_login_at,
+      created_at: user.created_at,
+      updated_at: user.updated_at
+    };
+
+    return { user: safeUser };
+  }
+
+  /**
+   * Initiate 2FA enrollment: returns secret, recovery codes, and QR code Data URL
+   */
+  async setup2FA(userId: number, req: Request): Promise<{
+    secret: string;
+    otpauthUrl: string;
+    qrCodeDataUrl: string;
+    recoveryCodes: string[];
+    hashedRecoveryCodes: StoredRecoveryCode[];
+  }> {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new Error('USER_NOT_FOUND');
+
+    const secret = generateTotpSecret();
+    const { plainCodes, hashedCodes } = generateRecoveryCodes(8);
+    const otpauthUrl = getTotpUri(user.email, secret, 'CHIKITSALYA');
+    const qrCodeDataUrl = await generateQrCodeDataUrl(otpauthUrl);
+
+    return {
+      secret,
+      otpauthUrl,
+      qrCodeDataUrl,
+      recoveryCodes: plainCodes,
+      hashedRecoveryCodes: hashedCodes
+    };
+  }
+
+  /**
+   * Complete 2FA enrollment by verifying the initial code
+   */
+  async enable2FA(
+    userId: number,
+    secret: string,
+    code: string,
+    recoveryCodes: StoredRecoveryCode[],
+    req: Request
+  ): Promise<void> {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new Error('USER_NOT_FOUND');
+
+    const isValid = verifyTotpCode(secret, code);
+    if (!isValid) {
+      throw new Error('INVALID_2FA_CODE');
+    }
+
+    const encryptedSecret = encryptTotpSecret(secret);
+    await userRepository.enableTwoFactor(userId, encryptedSecret, JSON.stringify(recoveryCodes));
+
+    await auditLogRepository.record({
+      actorUserId: user.id,
+      actorUsername: user.username,
+      actorRole: user.role,
+      eventType: 'AUTH_2FA_ENABLED',
+      resourceType: 'USER',
+      resourceId: String(user.id),
+      outcome: 'SUCCESS',
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'],
+      correlationId: req.correlationId || uuidv4(),
+      metadata: { message: 'Two-factor authentication successfully enabled' }
+    });
+  }
+
+  /**
+   * Disable 2FA after password and OTP/recovery verification
+   */
+  async disable2FA(userId: number, password: string, code: string, req: Request): Promise<void> {
+    const user = await userRepository.findById(userId);
+    if (!user) throw new Error('USER_NOT_FOUND');
+
+    const passwordValid = await verifyPassword(password, user.password_hash);
+    if (!passwordValid) {
+      throw new Error('INVALID_PASSWORD');
+    }
+
+    // Verify code before disabling
+    let codeValid = false;
+    if (user.two_factor_secret) {
+      try {
+        const plainSecret = decryptTotpSecret(user.two_factor_secret);
+        codeValid = verifyTotpCode(plainSecret, code);
+      } catch {}
+    }
+
+    if (!codeValid && user.recovery_codes) {
+      const stored: StoredRecoveryCode[] = JSON.parse(user.recovery_codes);
+      const res = consumeRecoveryCode(code, stored);
+      codeValid = res.valid;
+    }
+
+    if (!codeValid) {
+      throw new Error('INVALID_2FA_CODE');
+    }
+
+    await userRepository.disableTwoFactor(userId);
+
+    await auditLogRepository.record({
+      actorUserId: user.id,
+      actorUsername: user.username,
+      actorRole: user.role,
+      eventType: 'AUTH_2FA_DISABLED',
+      resourceType: 'USER',
+      resourceId: String(user.id),
+      outcome: 'SUCCESS',
+      ipAddress: req.ip || '127.0.0.1',
+      userAgent: req.headers['user-agent'],
+      correlationId: req.correlationId || uuidv4(),
+      metadata: { message: 'Two-factor authentication disabled by user' }
+    });
+  }
+
+  /**
+   * Check 2FA status for user
+   */
+  async get2FAStatus(userId: number): Promise<{ enabled: boolean; hasRecoveryCodes: boolean }> {
+    const user = await userRepository.findById(userId);
+    return {
+      enabled: Number(user?.two_factor_enabled) === 1,
+      hasRecoveryCodes: Boolean(user?.recovery_codes && user.recovery_codes.length > 5)
     };
   }
 }

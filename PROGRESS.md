@@ -100,34 +100,68 @@
     20. Brute-force rate limiting throttling verified (HTTP 429).
     21. Security audit logging verified in database table with IP & correlation ID.
 
-### D. Frontend Application (Angular 18 Standalone Architecture)
+### E. Advanced Cybersecurity Enhancements (Features 1 – 4)
+- [x] **Feature 1: Enterprise Security Command Center (SOC)**:
+  - Backend analytics engine `securityAnalyticsService.ts` aggregating real-time audit logs into 6 KPI metrics.
+  - SVG attack activity timeline (24-hour distribution), attack categories breakdown, and severity donut distribution.
+  - Searchable, filtered live event monitor (`/api/admin/security/events`) and actionable critical alerts (`/api/admin/security/alerts`).
+  - Dark enterprise-grade UI `security-command-center.component.ts` with live polling and JSON forensic trace inspection modal.
+  - 11 automated integration tests passing (`tests/securityCommandCenter.test.ts`).
+- [x] **Feature 2: Two-Factor Authentication (2FA / TOTP)**:
+  - Cryptographic RFC 6238 TOTP engine `backend/src/utils/totp.ts` with Base32 decoding and dynamic QR code generation (`qrcode`).
+  - AES-256-GCM symmetric encryption for TOTP secrets at rest (`TWO_FACTOR_ENCRYPTION_KEY`).
+  - 8 single-use cryptographically hashed emergency backup recovery codes with single-use consumption.
+  - Multi-stage login flow: 2FA-enabled accounts receive short-lived HMAC pending token; session cookie issued only upon OTP/recovery verification.
+  - Frontend wizard in `account-security.component.ts` and 2FA challenge screen in `login.component.ts`.
+- [x] **Feature 3: Active Session & Device Management**:
+  - Server-side session registry tracking `userAgent`, parsed OS/browser (`parseDeviceInfo`), `ipAddress`, and `lastActivity`.
+  - Distinguishes current device via session ID matching.
+  - Remote revocation of individual sessions (`DELETE /api/auth/sessions/:sessionId`) and bulk revocation (`DELETE /api/auth/sessions/other`).
+  - Real-time invalidation enforced on subsequent API requests via session authentication middleware.
+  - 13 automated integration tests passing (`tests/twoFactorAndSessions.test.ts`).
+- [x] **Feature 4: Web Application Firewall (WAF) Simulator**:
+  - In-line request inspection middleware `wafMiddleware.ts` scanning request headers, query parameters, and body.
+  - Configurable regex rule set (`WAF-SQLI-001`, `WAF-XSS-002`, `WAF-PATH-003`, `WAF-CMD-004`, `WAF-PROTO-005`).
+  - Strict exclusion of sensitive fields (`password`, `otpCode`, `twoFactorCode`, `recoveryCode`) from scanning and logging.
+  - Dynamic BLOCK vs. DETECT_ONLY mode toggling for administrators with audit logging (`WAF_RULE_CONFIG_CHANGED`).
+  - Interactive WAF management dashboard `waf-management.component.ts` and safe simulation laboratory in `security-demo-center.component.ts`.
+  - 12 automated integration tests passing (`tests/waf.test.ts`).
+
+### F. Frontend Application (Angular 18 Standalone Architecture)
 - [x] **Root Angular Architecture**: Standalone components, Zoneless-compatible change detection, typed reactive forms.
 - [x] **Security Interceptors & Guards**:
   - `csrf.interceptor.ts`: Attaches `withCredentials: true` and `X-CSRF-Token` to state-changing requests.
   - `auth.guard.ts` & `roleGuard`: Enforces client-side route protection aligned with backend RBAC.
 - [x] **Authentication & Registration**:
-  - `login.component.ts`: Centered card with 4 one-click demo credentials for academic viva.
+  - `login.component.ts`: Centered card with 4 one-click demo credentials for academic viva + 2FA TOTP verification screen.
   - `register.component.ts`: Strict patient self-registration with live password complexity validation.
+  - `account-security.component.ts`: Complete 2FA enrollment wizard + Active session device manager.
 - [x] **Role-Based Portals**:
   - Patient Portal: Health overview, consultation booking, appointments, redacted clinical history.
   - Doctor Portal: Attending physician console, patient encounters, clinical notes documentation.
   - Administrator Portal: Operations control, doctor provisioning, user activation, audit inspection.
+  - Security Command Center: Dark enterprise SOC dashboard with real-time attack telemetry and forensic modal.
+  - WAF Management Console: Rule toggle and inspected attack telemetry dashboard.
 - [x] **Interactive Security Demonstration Center (`/security-demo`)**:
-  - Live interactive testing harness executing harmless SQLi, password hash inspection, XSS filtering, CSRF token validation, IDOR testing, and HTTP security response headers.
-  - 12-Control Academic Specification Table.
+  - Live interactive testing harness executing harmless SQLi, password hash inspection, XSS filtering, CSRF token validation, IDOR testing, HTTP security response headers, and WAF payload simulation.
+  - 16-Control Academic Specification Table.
 
 ---
 
 ## 2. Testing & Verification Status: 100% Complete
-- [x] **Automated Security Suite**: 21/21 Automated tests passing (`npx vitest run`).
+- [x] **Automated Security Suite**: 57/57 Automated tests passing across 4 suites (`npx vitest run`).
+  - `tests/securityCommandCenter.test.ts`: 11 passed
+  - `tests/waf.test.ts`: 12 passed
+  - `tests/twoFactorAndSessions.test.ts`: 13 passed
+  - `tests/security.test.ts`: 21 passed
 - [x] **Frontend Production Build**: Successfully compiled (`npx ng build`).
 - [x] **Integrated Application Server**: Active on `http://localhost:4000` (serving Angular frontend + Express REST API).
 
 ---
 
 ## 3. Documentation Deliverables: 100% Complete
-- [x] `README.md`: Setup instructions, credentials, architectural diagram, and test results.
+- [x] `README.md`: Setup instructions, credentials, architectural diagram, 16 controls, and test results.
 - [x] `PROGRESS.md`: Current implementation status.
-- [x] `docs/SECURITY_IMPLEMENTATION.md`: Defense-in-depth specification of 12 security features.
-- [x] `docs/SECURITY_TESTING.md`: 21-point automated and manual security verification matrix.
+- [x] `docs/SECURITY_IMPLEMENTATION.md`: Defense-in-depth specification of 16 security features.
+- [x] `docs/SECURITY_TESTING.md`: 57-point automated and manual security verification matrix.
 - [x] `docs/PRESENTATION_GUIDE.md`: Academic slide outline and 5-7 minute spoken viva script.

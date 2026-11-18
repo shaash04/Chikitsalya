@@ -1,11 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/authService.js';
-import { loginSchema, registerPatientSchema, changePasswordSchema } from '../validators/index.js';
+import {
+  loginSchema,
+  registerPatientSchema,
+  changePasswordSchema,
+  enable2FASchema,
+  verifyLogin2FASchema,
+  disable2FASchema,
+  sessionIdParamSchema
+} from '../validators/index.js';
 import { userRepository } from '../repositories/userRepository.js';
 import { patientRepository } from '../repositories/patientRepository.js';
 import { doctorRepository } from '../repositories/doctorRepository.js';
 import { env } from '../config/env.js';
 import { loginRateLimiter } from '../middleware/rateLimiter.js';
+import { getUserSessions, revokeUserSession, revokeOtherSessions } from '../middleware/sessionAuth.js';
 
 export class AuthController {
   async login(req: Request, res: Response, next: NextFunction) {
@@ -168,6 +177,159 @@ export class AuthController {
           error: { code: 'WEAK_PASSWORD', message: err.message.replace('WEAK_PASSWORD:', '') }
         });
       }
+      next(err);
+    }
+  }
+
+  async loginVerify2FA(req: Request, res: Response, next: NextFunction) {
+    try {
+      const validated = verifyLogin2FASchema.parse(req.body);
+      const result = await authService.loginVerify2FA(validated, req, res);
+      return res.json({
+        success: true,
+        message: 'Two-factor authentication verified successfully.',
+        data: result
+      });
+    } catch (err: any) {
+      if (err.message === 'INVALID_OR_EXPIRED_2FA_TOKEN') {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'EXPIRED_2FA_TOKEN', message: 'Temporary 2FA token has expired. Please sign in again.' }
+        });
+      }
+      if (err.message === 'INVALID_2FA_CODE') {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'INVALID_2FA_CODE', message: 'Invalid 6-digit authentication code.' }
+        });
+      }
+      if (err.message === 'INVALID_RECOVERY_CODE') {
+        return res.status(401).json({
+          success: false,
+          error: { code: 'INVALID_RECOVERY_CODE', message: 'Invalid or already consumed single-use recovery code.' }
+        });
+      }
+      next(err);
+    }
+  }
+
+  async setup2FA(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.sessionUser) {
+        return res.status(401).json({ success: false, error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+      }
+      const data = await authService.setup2FA(req.sessionUser.userId, req);
+      return res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async enable2FA(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.sessionUser) {
+        return res.status(401).json({ success: false, error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+      }
+      const validated = enable2FASchema.parse(req.body);
+      await authService.enable2FA(req.sessionUser.userId, validated.secret, validated.code, validated.recoveryCodes, req);
+      return res.json({
+        success: true,
+        message: 'Two-factor authentication is now active on your account.'
+      });
+    } catch (err: any) {
+      if (err.message === 'INVALID_2FA_CODE') {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_2FA_CODE', message: 'Verification code is invalid. Check your authenticator app.' }
+        });
+      }
+      next(err);
+    }
+  }
+
+  async disable2FA(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.sessionUser) {
+        return res.status(401).json({ success: false, error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+      }
+      const validated = disable2FASchema.parse(req.body);
+      await authService.disable2FA(req.sessionUser.userId, validated.password, validated.code, req);
+      return res.json({
+        success: true,
+        message: 'Two-factor authentication has been disabled.'
+      });
+    } catch (err: any) {
+      if (err.message === 'INVALID_PASSWORD') {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_PASSWORD', message: 'Current password provided is incorrect.' }
+        });
+      }
+      if (err.message === 'INVALID_2FA_CODE') {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_2FA_CODE', message: 'Authentication or recovery code is incorrect.' }
+        });
+      }
+      next(err);
+    }
+  }
+
+  async get2FAStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.sessionUser) {
+        return res.status(401).json({ success: false, error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+      }
+      const status = await authService.get2FAStatus(req.sessionUser.userId);
+      return res.json({ success: true, data: status });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getActiveSessions(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.sessionUser) {
+        return res.status(401).json({ success: false, error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+      }
+      const sessions = await getUserSessions(req.sessionUser.userId, req.sessionId);
+      return res.json({ success: true, data: sessions });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async revokeSession(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.sessionUser) {
+        return res.status(401).json({ success: false, error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+      }
+      const { sessionId } = sessionIdParamSchema.parse(req.params);
+      const isCurrent = sessionId === req.sessionId;
+      const revoked = await revokeUserSession(sessionId, req.sessionUser.userId, isCurrent ? res : undefined);
+
+      return res.json({
+        success: true,
+        message: revoked ? 'Session revoked successfully.' : 'Session not found or already terminated.',
+        isCurrent
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async revokeOtherSessions(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.sessionUser || !req.sessionId) {
+        return res.status(401).json({ success: false, error: { code: 'UNAUTHENTICATED', message: 'Authentication required' } });
+      }
+      const count = await revokeOtherSessions(req.sessionId, req.sessionUser.userId);
+      return res.json({
+        success: true,
+        message: `Revoked ${count} other active session(s).`,
+        count
+      });
+    } catch (err) {
       next(err);
     }
   }

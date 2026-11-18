@@ -2,7 +2,7 @@
 
 [![Web Security](https://img.shields.io/badge/Security-Defense--in--Depth-0284c7.svg)](#mandatory-security-controls)
 [![Course](https://img.shields.io/badge/Course-21CSE438T%20Web%20Security-emerald.svg)](#academic-context)
-[![Tests](https://img.shields.io/badge/Automated%20Security%20Tests-21%2F21%20Passed-success.svg)](#automated-security-testing)
+[![Tests](https://img.shields.io/badge/Automated%20Security%20Tests-57%2F57%20Passed-success.svg)](#automated-security-testing)
 [![Tech Stack](https://img.shields.io/badge/Stack-Angular%2018%20%7C%20Node.js%20%7C%20Express%20%7C%20MySQL%208-blueviolet.svg)](#technology-stack)
 
 **Secure Hospital Management System (SHMS)** is an enterprise-grade, full-stack academic web application designed for the **Web Security (21CSE438T)** course at SRM Institute of Science and Technology. It models a production-grade hospital portal demonstrating defense-in-depth security mitigations against real-world attack vectors, including SQL Injection, Cross-Site Scripting (XSS), Cross-Site Request Forgery (CSRF), Insecure Direct Object References (IDOR), session hijacking, privilege escalation, and credential stuffing.
@@ -55,14 +55,18 @@ Following the security principles laid out by Saltzer & Schroeder (1975) and mod
 - **Driver**: `mysql2/promise` utilizing prepared statements and parameter binding (`?` placeholders)
 - **High-Fidelity Fallback**: Automatic, zero-dependency in-memory relational engine for running automated tests in isolated CI/CD environments without external database server dependencies.
 
-### Security Libraries
+### Security Libraries & Advanced Enhancements
 - **Password Hashing**: `bcryptjs` (Blowfish cipher, work factor 12)
+- **Two-Factor Authentication (2FA)**: RFC 6238 TOTP with Base32 decoding, `qrcode` data URL rendering, AES-256-GCM encrypted secrets at rest, and 8 single-use hashed emergency backup recovery codes.
+- **Active Session & Device Registry**: Server-side session store with device/OS/browser user-agent telemetry, IP tracking, current device tagging, and remote session revocation.
+- **Web Application Firewall (WAF) Simulator**: In-line request inspection middleware scanning headers, query params, and body for SQLi, XSS, Path Traversal, and Command Injection with configurable BLOCK / DETECT_ONLY modes.
+- **Security Command Center (SOC)**: Enterprise-grade dark telemetry dashboard with 6 KPI cards, SVG attack activity timelines, threat category breakdown bars, severity donut charts, and searchable live audit logs.
 - **Security HTTP Headers**: `helmet` (CSP, anti-clickjacking `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`)
 - **Session Management**: Server-side session registry with signed `HttpOnly`, `SameSite=Strict` cookies
 - **CSRF Protection**: Double-Submit HMAC cryptographic tokens verified on state mutations
 - **Rate Limiting**: `express-rate-limit` with IP-based throttling and database account lockout
 - **Validation**: `zod` for compile-time & runtime schema validation
-- **Testing**: `vitest` + `supertest` for end-to-end security integration testing
+- **Testing**: `vitest` + `supertest` with 57 automated end-to-end security integration tests
 
 ---
 
@@ -211,6 +215,10 @@ CHIKITSALYA/
 | 10 | **Patient Privacy & IDOR Prevention** | Horizontal privilege escalation | `backend/src/middleware/rbac.ts (requireRecordAccess)` | Checks requester user ID matches record owner; cross-access denied with 403 |
 | 11 | **Security Audit Logs** | Unaccountable misuse, repudiation | `backend/src/repositories/auditLogRepository.ts` | Database-backed audit table recording actor, event, IP, correlation ID, outcome |
 | 12 | **Secure Secrets & Configuration** | Secret leakage in version control | `backend/src/config/env.ts` | Mandatory variables validated on boot via Zod; passwords/keys isolated in `.env` |
+| 13 | **Two-Factor Authentication (2FA)** | Credential stuffing, account takeover | `backend/src/utils/totp.ts` & `authController.ts` | RFC 6238 TOTP, AES-256-GCM encrypted secrets at rest, 8 single-use hashed recovery codes |
+| 14 | **Active Session & Device Management** | Stale sessions, rogue concurrent logins | `backend/src/middleware/sessionAuth.ts` | Server-side session registry, browser/OS device parsing, single & bulk remote revocation |
+| 15 | **Web Application Firewall (WAF)** | Zero-day web exploits, injection payloads | `backend/src/middleware/wafMiddleware.ts` | In-line regex scanning for SQLi, XSS, Path Traversal, Command Injection (BLOCK/DETECT_ONLY) |
+| 16 | **Security Command Center (SOC)** | Blind spots, delayed incident response | `backend/src/services/securityAnalyticsService.ts` | Enterprise dark SOC console: 6 KPI metrics, SVG timeline charts, event donut, live event monitor |
 
 ---
 
@@ -330,9 +338,13 @@ Open your browser to: **`http://localhost:4200`**
 
 ## 10. Automated Security Testing
 
-The backend includes a comprehensive automated security test suite (`backend/tests/security.test.ts`) executed with `vitest` and `supertest`.
+The backend includes a comprehensive automated security test suite comprising 4 test suites and **57 automated tests** executed with `vitest` and `supertest`:
+1. `tests/securityCommandCenter.test.ts` (11 tests) - Threat analytics, KPI metrics, RBAC, live event filtering, alert triggers.
+2. `tests/twoFactorAndSessions.test.ts` (13 tests) - TOTP enrollment, AES-256 secret encryption, invalid OTP rejection, 2FA login challenge, recovery codes, session device parsing, remote session revocation.
+3. `tests/waf.test.ts` (12 tests) - SQL injection detection, XSS detection, Path Traversal detection, false-positive handling on medical notes, BLOCK vs DETECT_ONLY mode updates, attack simulation.
+4. `tests/security.test.ts` (21 tests) - Core auth, bcrypt, RBAC, IDOR, parameterized queries, CSRF Double-Submit tokens, Helmet headers, Zod validation, rate limiting, and audit logging.
 
-To execute the test suite:
+To execute the complete test suite:
 ```powershell
 npm test
 ```
@@ -340,36 +352,21 @@ npm test
 
 ### Verified Test Results:
 ```text
- ✓ tests/security.test.ts (21 tests) 2421ms
-   ✓ should successfully authenticate with valid credentials and return httpOnly session cookie
-   ✓ should reject invalid credentials with generic error message (anti-account enumeration)
-   ✓ should reject nonexistent email with identical generic error to prevent account discovery
-   ✓ should reject unauthenticated requests to protected endpoints with 401
-   ✓ should invalidate session and clear cookie upon logout
-   ✓ should prevent patient from accessing administrator APIs (HTTP 403)
-   ✓ should prevent doctor from accessing administrator user management APIs (HTTP 403)
-   ✓ should allow administrator to access admin user management APIs (HTTP 200)
-   ✓ should allow Patient 1 (John Doe) to view their own medical record #1
-   ✓ should DENY Patient 1 (John Doe) from accessing Patient 2 (Jane Smith) record #3 (IDOR Prevented)
-   ✓ should reject SQL injection payload in login without altering SQL query structure
-   ✓ should safely execute parameterized query via security demo without altering SQL syntax
-   ✓ should issue a cryptographically signed CSRF token with cookie and JSON
-   ✓ should reject state-changing request (POST appointment) when X-CSRF-Token header is missing
-   ✓ should accept state-changing request when valid X-CSRF-Token header is attached
-   ✓ should attach expected Helmet security headers to all responses
-   ✓ should escape dangerous HTML tags in input via security demo test
-   ✓ should reject malformed patient registration data with 400 Bad Request
-   ✓ should reject invalid appointment ID with 400 validation error and suppress stack traces
-   ✓ should throttle requests and return HTTP 429 when rate limit threshold is exceeded
-   ✓ should record audit events in database and allow admin inspection
+ RUN  v3.2.7 E:/Chikitsalaya/Chikitsalya/backend
 
-Test Files: 1 passed (1)
-     Tests: 21 passed (21) - 100% Pass Rate
+ ✓ tests/securityCommandCenter.test.ts (11 tests) 1428ms
+ ✓ tests/waf.test.ts (12 tests) 1447ms
+ ✓ tests/security.test.ts (21 tests) 3028ms
+ ✓ tests/twoFactorAndSessions.test.ts (13 tests) 3053ms
+
+ Test Files  4 passed (4)
+      Tests  57 passed (57) - 100% Pass Rate
+   Duration  5.97s
 ```
 
 ---
 
-## 11. Security Demonstration Center
+## 11. Security Demonstration Center & Advanced Features
 
 For academic project viva, demonstrations, and college presentations:
 1. Navigate to **`http://localhost:4200/security-demo`** (or **`http://localhost:4000/security-demo`**).
@@ -383,7 +380,27 @@ For academic project viva, demonstrations, and college presentations:
    - Test 6: HTTP Security headers report.
    - Test 7: Database audit log inspection.
    - Test 8: Configuration secrets verification.
-   - A master specification table outlining all 12 controls, threat models, implementation source files, and verification status.
+   - Test 9: Web Application Firewall (WAF) live payload filter (SQLi, XSS, Path Traversal, Command Injection).
+   - A master specification table outlining all 16 controls, threat models, implementation source files, and verification status.
+
+3. **Feature 1: Security Command Center (`/admin/security-center`)**:
+   - Enterprise-grade dark SOC dashboard for administrators.
+   - Real-time KPI summary (Total Analyzed, Suspicious Requests, Blocked Attacks, Failed Logins, Active Sessions, Critical Alerts).
+   - SVG attack timeline polyline chart, threat categories horizontal bars, severity donut chart, login ratio stats.
+   - Live security event stream with severity badges, IP, actor, and instant JSON forensic trace modal.
+
+4. **Feature 2: Two-Factor Authentication (2FA) (`/account/security`)**:
+   - RFC 6238 TOTP enrollment with QR code, manual secret, and AES-256-GCM secret encryption at rest.
+   - 8 single-use cryptographically hashed backup recovery codes.
+   - Strict 2FA challenge gate during login preventing session cookie issuance until OTP verification.
+
+5. **Feature 3: Active Session & Device Management (`/account/security`)**:
+   - Live session registry tracking device, OS, browser, IP address, and last active timestamp.
+   - Real-time current device badge with individual remote revocation and "Revoke All Other Sessions" capability.
+
+6. **Feature 4: Web Application Firewall (WAF) Simulator (`/admin/waf`)**:
+   - In-line request inspection engine (`WAF-SQLI-001`, `WAF-XSS-002`, `WAF-PATH-003`, `WAF-CMD-004`, `WAF-PROTO-005`).
+   - Administrator rule toggles between BLOCK and DETECT_ONLY modes with real-time incident audit logging.
 
 ---
 
